@@ -1,0 +1,775 @@
+/* ============================================================
+   MCM Mood Mirror — 미러 화면 + STAFF VIEW
+   조명 연출의 핵심은 .mirror 의 filter 와 .light 레이어의 blend 다.
+   자세한 근거는 PRD §14.1 참고.
+   ============================================================ */
+
+:root {
+  --ink: #f4f1ec;
+  --ink-dim: #a8a49c;
+  --line: rgba(244, 241, 236, 0.14);
+  --cognac: #a4642a;
+  --panel-bg: #0d0d0f;
+
+  --serif: 'Georgia', 'Times New Roman', serif;
+  --sans: 'Pretendard', -apple-system, 'Segoe UI', 'Malgun Gothic', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #08080a;
+  color: var(--ink);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  height: 100%;
+}
+
+@media (max-width: 1100px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    overflow: auto;
+  }
+}
+
+/* ---------------------------------------------------------- 미러 스테이지 */
+
+.stage {
+  position: relative;
+  overflow: hidden;
+  background: #050506;
+  isolation: isolate;
+}
+
+/*
+  거울처럼 좌우 반전. 분석용 캡처는 반전 전 원본을 쓰므로 결과에 영향이 없다.
+  filter 가 여기 걸려 있어서 화면 속 얼굴과 옷의 색이 실제로 변한다 — 이게
+  "배경색이 바뀌었다"와 "조명이 들어왔다"를 가르는 지점이다.
+*/
+.mirror {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+  filter: brightness(var(--video-brightness)) contrast(var(--video-contrast))
+    saturate(var(--video-saturate));
+  transition: filter var(--transition) cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.light {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity var(--transition) cubic-bezier(0.4, 0, 0.2, 1),
+    background var(--transition) cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 넓게 깔리는 바탕 광. soft-light 라 인물의 명암을 뭉개지 않는다. */
+.light--primary {
+  background: radial-gradient(120% 90% at 50% 55%, var(--primary) 0%, transparent 78%),
+    linear-gradient(180deg, var(--primary) 0%, transparent 45%, var(--primary) 100%);
+  mix-blend-mode: soft-light;
+  opacity: var(--tint-primary-opacity);
+}
+
+/* 위에서 떨어지는 포인트 광. overlay 라 색이 실제로 인물에 얹힌다. */
+.light--accent {
+  background: radial-gradient(65% 55% at 50% 22%, var(--accent) 0%, transparent 72%);
+  mix-blend-mode: overlay;
+  opacity: var(--tint-accent-opacity);
+}
+
+.light--sweep {
+  background: conic-gradient(
+    from 0deg at 50% 45%,
+    transparent 0deg,
+    var(--accent) 40deg,
+    transparent 110deg,
+    transparent 360deg
+  );
+  mix-blend-mode: overlay;
+  opacity: 0;
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(115% 95% at 50% 45%, transparent 42%, rgba(0, 0, 0, 0.82) 100%);
+}
+
+/* 필름 그레인. 디지털 화면 느낌을 깎아내 조명처럼 보이게 한다. */
+.grain {
+  position: absolute;
+  inset: -50%;
+  pointer-events: none;
+  opacity: 0.22;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  animation: grain-shift 1.4s steps(4) infinite;
+}
+
+@keyframes grain-shift {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-3%, 2%); }
+  50% { transform: translate(2%, -3%); }
+  75% { transform: translate(-2%, -2%); }
+  100% { transform: translate(0, 0); }
+}
+
+/* effect: breathe — 밝기가 아주 느리게 오르내린다. 정적인 화면을 살아있게 만든다. */
+.fx-breathe .light--primary {
+  animation: breathe 6.5s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.09); }
+}
+
+/* effect: sweep — 느린 원형 스윕. 강한 무드에서만 쓴다. */
+.fx-sweep .light--sweep {
+  opacity: calc(var(--tint-accent-opacity) * 0.55);
+  animation: sweep 14s linear infinite;
+}
+
+@keyframes sweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 응대 모드: 조명은 그대로 두고 오버레이만 물러난다. 대화가 주인공이 된다. */
+.stage.is-serving .overlay--bottom {
+  opacity: 0.55;
+}
+
+/* ---------------------------------------------------------- 오버레이 */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 4vmin;
+  pointer-events: none;
+  transition: opacity 600ms ease;
+}
+
+.overlay > * {
+  pointer-events: auto;
+}
+
+.overlay--center {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 18px;
+}
+
+.overlay--bottom {
+  justify-content: flex-end;
+  align-items: flex-start;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.eyebrow--warn {
+  color: var(--cognac);
+}
+
+.display {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(34px, 5.2vw, 64px);
+  letter-spacing: 0.01em;
+  text-shadow: 0 2px 30px rgba(0, 0, 0, 0.6);
+}
+
+.display--sm {
+  font-size: clamp(28px, 3.4vw, 46px);
+}
+
+.lede {
+  margin: 0;
+  font-size: 15px;
+  color: var(--ink-dim);
+  letter-spacing: 0.02em;
+}
+
+.consent {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: rgba(168, 164, 156, 0.72);
+  letter-spacing: 0.02em;
+}
+
+.btn {
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 15px 34px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 220ms ease, border-color 220ms ease, color 220ms ease;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn--primary {
+  background: var(--ink);
+  color: #0b0b0d;
+  border: 1px solid var(--ink);
+}
+
+.btn--primary:not(:disabled):hover {
+  background: var(--cognac);
+  border-color: var(--cognac);
+  color: var(--ink);
+}
+
+.btn--ghost {
+  background: rgba(10, 10, 12, 0.42);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(10px);
+  padding: 11px 22px;
+}
+
+.btn--ghost:hover {
+  border-color: var(--cognac);
+}
+
+.notice {
+  max-width: 420px;
+  padding: 18px 22px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: rgba(10, 10, 12, 0.6);
+  backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+}
+
+.notice--error {
+  border-color: rgba(190, 70, 70, 0.5);
+}
+
+.notice p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-dim);
+}
+
+/* ---------------------------------------------------------- 카운트다운 / 분석 */
+
+.countdown {
+  font-family: var(--serif);
+  font-size: clamp(90px, 16vw, 190px);
+  line-height: 1;
+  animation: count-pop 1s ease-out;
+}
+
+@keyframes count-pop {
+  0% { opacity: 0; transform: scale(1.35); }
+  22% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0.25; transform: scale(0.94); }
+}
+
+.pulse {
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  border-top-color: var(--cognac);
+  animation: spin 1.5s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.step {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: rgba(168, 164, 156, 0.32);
+  transition: color 400ms ease;
+}
+
+.step--active {
+  color: var(--ink);
+}
+
+.step--done {
+  color: rgba(168, 164, 156, 0.66);
+}
+
+.step--done::after {
+  content: ' ·';
+  color: var(--cognac);
+}
+
+/* ---------------------------------------------------------- 컨셉 카드 */
+
+.concept {
+  max-width: 520px;
+  padding: 26px 30px 24px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(8, 8, 10, 0.34), rgba(8, 8, 10, 0.72));
+  backdrop-filter: blur(16px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: rise 900ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(26px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.comment {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--ink-dim);
+}
+
+.palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  padding: 5px 11px 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.chip--sm {
+  font-size: 10px;
+  padding: 3px 9px 3px 5px;
+}
+
+.chip__dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.meta {
+  display: flex;
+  gap: 26px;
+  margin: 2px 0 0;
+  flex-wrap: wrap;
+}
+
+.meta dt {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(168, 164, 156, 0.55);
+  margin-bottom: 4px;
+}
+
+.meta dd {
+  margin: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* AI 결과인지 폴백인지 한눈에 구분하는 배지 */
+.concept__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.srcbadge {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.srcbadge--ai {
+  border-color: rgba(76, 175, 125, 0.5);
+  color: #6fc79a;
+}
+
+.srcbadge--fallback {
+  border-color: rgba(164, 100, 42, 0.55);
+  color: var(--cognac);
+}
+
+.staff__source {
+  margin: 0;
+}
+
+/* 재생 중인 곡. CC 저작자 표시 요건이라 눈에 보여야 한다. */
+.track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-dim);
+  flex-wrap: wrap;
+}
+
+.track__note {
+  color: var(--cognac);
+}
+
+.track--muted {
+  color: rgba(217, 112, 112, 0.9);
+}
+
+.btn--tiny {
+  font-size: 10px;
+  padding: 5px 11px;
+  letter-spacing: 0.1em;
+}
+
+.track a {
+  color: var(--ink-dim);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+
+.track a:hover {
+  color: var(--cognac);
+  border-bottom-color: var(--cognac);
+}
+
+.track__src {
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  opacity: 0.65;
+}
+
+.track__src--ai {
+  border-color: rgba(76, 175, 125, 0.5);
+  color: #6fc79a;
+  opacity: 1;
+}
+
+.track__reason {
+  margin: -4px 0 0 18px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(168, 164, 156, 0.7);
+}
+
+.actions {
+  display: flex;
+  gap: 9px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.btn--ghost.is-muted {
+  border-color: var(--cognac);
+  color: var(--cognac);
+}
+
+/* ---------------------------------------------------------- 상태바 */
+
+.statusbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: rgba(168, 164, 156, 0.62);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.45), transparent);
+  pointer-events: none;
+}
+
+.statusbar__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #6b6b72;
+}
+
+.statusbar__dot[data-mode='live'] {
+  background: #4caf7d;
+}
+
+.statusbar__dot[data-mode='mock'] {
+  background: var(--cognac);
+}
+
+.statusbar__session {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+}
+
+/* ---------------------------------------------------------- STAFF VIEW */
+
+.staff {
+  background: var(--panel-bg);
+  border-left: 1px solid var(--line);
+  padding: 20px 20px 40px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.staff__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.staff__title {
+  margin: 6px 0 0;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 21px;
+}
+
+.badge {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+.badge--live {
+  border-color: var(--cognac);
+  color: var(--cognac);
+}
+
+.staff__disclaimer {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: rgba(164, 100, 42, 0.92);
+  border: 1px dashed rgba(164, 100, 42, 0.42);
+  border-radius: 3px;
+}
+
+.staff__block {
+  border-top: 1px solid var(--line);
+  padding-top: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.staff__label {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(168, 164, 156, 0.55);
+}
+
+.staff__mood {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 17px;
+}
+
+.staff__tags,
+.staff__styling,
+.staff__note,
+.staff__empty,
+.staff__stock {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--ink-dim);
+}
+
+.staff__note {
+  color: var(--cognac);
+  font-size: 11px;
+}
+
+.staff__empty--error {
+  color: #d97070;
+}
+
+.staff__stock {
+  font-size: 10.5px;
+  opacity: 0.6;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.rec {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.rec__item {
+  display: grid;
+  grid-template-columns: 16px 72px 1fr;
+  gap: 9px;
+  align-items: start;
+}
+
+.rec__rank {
+  font-family: var(--serif);
+  font-size: 15px;
+  color: var(--cognac);
+  line-height: 1.3;
+}
+
+/* 제품 사진. MCM 이미지 CDN 은 흰 배경이라 살짝 어둡게 눌러 패널 톤에 맞춘다. */
+.thumb {
+  width: 72px;
+  height: 84px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+  background: #16161a;
+  display: flex;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: brightness(0.94) contrast(1.03);
+}
+
+/* 이미지 실패 시 컬러 스와치로 대체 — 빈 사각형보다 정보가 있다. */
+.thumb--empty i {
+  flex: 1;
+}
+
+.rec__body {
+  min-width: 0;
+}
+
+.rec__name {
+  display: block;
+  margin: 0 0 3px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+a.rec__name:hover {
+  color: var(--cognac);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rec__price {
+  margin: 0 0 5px;
+  font-family: var(--serif);
+  font-size: 14px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.rec__reason {
+  margin: 0 0 5px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--ink-dim);
+}
+
+.rec__meta,
+.rec__loc {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: rgba(168, 164, 156, 0.5);
+}
+
+.rec__loc {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rec__colors {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.rec__colors .chip__dot {
+  width: 9px;
+  height: 9px;
+}

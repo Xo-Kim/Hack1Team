@@ -1,0 +1,12 @@
+{
+  "_comment": "Claude Code 미리보기 전용 설정. 사장님 로컬 실행(5173/8080)과 겹치지 않도록 5174 를 쓴다. 직접 실행할 때는 README 의 npm run dev 를 쓰면 된다.",
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mood-mirror-front-alt",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "Front", "run", "dev", "--", "--port", "5174"],
+      "port": 5174
+    }
+  ]
+}

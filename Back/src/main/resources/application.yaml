@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: Back
+
+  config:
+    # API 키는 Back/application-local.yaml 에 넣는다 (.gitignore 처리됨).
+    # optional: 이라 파일이 없어도 기동에 실패하지 않고, classpath 가 아니라
+    # 실행 디렉터리를 읽으므로 jar 안에 시크릿이 딸려 들어가지 않는다.
+    # 환경변수를 쓰면 그쪽이 우선한다.
+    import: optional:file:./application-local.yaml
+
+server:
+  # 기본 8080. 포트가 겹치면 SERVER_PORT 로 덮어쓴다.
+  port: ${SERVER_PORT:8080}
+
+logging:
+  level:
+    com.example.back: INFO
+
+mood-mirror:
+  llm:
+    # 비워두면 자동으로 mock 모드로 동작한다 (API 키 없이 전체 플로우 시연 가능).
+    api-key: ${OPENAI_API_KEY:}
+    base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
+    vision-model: ${LLM_VISION_MODEL:gpt-4o}
+    text-model: ${LLM_TEXT_MODEL:gpt-4o-mini}
+    connect-timeout-seconds: 10
+    read-timeout-seconds: 40
+  music:
+    jamendo:
+      # devportal.jamendo.com 에서 무료 발급. 비워두면 절차적 앰비언스로 폴백한다.
+      client-id: ${JAMENDO_CLIENT_ID:}
+      base-url: https://api.jamendo.com/v3.0
+      # 조명 연출 시작을 막지 않도록 짧게 끊는다. 실패해도 폴백이 받아준다.
+      timeout-seconds: 4
+
+  cors:
+    # Vite proxy 를 쓰면 동일 출처가 되어 실제로는 사용되지 않는다.
+    # 프론트를 다른 포트로 띄울 때를 대비해 몇 개 열어둔다.
+    allowed-origins:
+      - http://localhost:5173
+      - http://127.0.0.1:5173
+      - http://localhost:5174
+      - http://127.0.0.1:5174
+  session:
+    ttl-minutes: 15

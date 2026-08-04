@@ -1,0 +1,37 @@
+# ---------------------------------------------------------------------------
+# 로컬 API 키 템플릿
+#
+# 사용법 (이 파일은 남겨두고 "복사"할 것 — 이름만 바꾸면 템플릿이 사라진다):
+#   cp application-local.yaml.example application-local.yaml
+#   그다음 application-local.yaml 을 열어 실제 키를 채운다
+#
+# 확인:
+#   curl http://localhost:8080/api/health
+#     llmMode: live      → OpenAI 키가 들어옴
+#     musicMode: jamendo → Jamendo client_id 가 들어옴
+#
+#   단, live 는 "키가 들어왔다"는 뜻이지 "유효하다"는 뜻이 아니다.
+#   실제 성공 여부는 서버 로그에서 확인한다.
+#     analyze done ... fallback=false   → LLM 호출 성공
+#     [RATE LIMIT] ...                  → 분당 요청 한도 초과
+#
+# 주의:
+#   - application-local.yaml 은 .gitignore 에 등록되어 있다. 절대 커밋하지 말 것.
+#   - 이 .example 파일에는 실제 키를 적지 말 것 (이쪽은 커밋된다).
+#   - classpath 가 아니라 실행 디렉터리에서 읽으므로 jar 에 딸려 들어가지 않는다.
+#   - OS 환경변수 / IntelliJ 실행 구성의 환경변수가 있으면 그쪽이 우선한다.
+#     IntelliJ 에 빈 값으로 남아 있으면 이 파일에 키가 있어도 mock 으로 떨어진다.
+# ---------------------------------------------------------------------------
+
+# OpenAI API 키. https://platform.openai.com/api-keys
+# 무료 등급은 gpt-4o 분당 3회 제한이다. 한 세션이 3회를 쓰므로
+# 발표 전에 결제 수단을 등록해 한도를 올릴 것.
+OPENAI_API_KEY: sk-여기에_실제_키
+
+# Jamendo client_id. https://devportal.jamendo.com → Sign up → Jamendo Apps
+# "Read only" 플랜이면 충분하다.
+JAMENDO_CLIENT_ID: 여기에_실제_client_id
+
+# (선택) 모델을 바꾸고 싶을 때만
+# LLM_VISION_MODEL: gpt-4o
+# LLM_TEXT_MODEL: gpt-4o-mini
