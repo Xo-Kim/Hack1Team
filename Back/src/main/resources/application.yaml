@@ -17,6 +17,14 @@ logging:
   level:
     com.example.back: INFO
 
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    doc-expansion: none
+  api-docs:
+    path: /v3/api-docs
+
 mood-mirror:
   llm:
     # 비워두면 자동으로 mock 모드로 동작한다 (API 키 없이 전체 플로우 시연 가능).

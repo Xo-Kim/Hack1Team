@@ -24,6 +24,25 @@ cd Front && npm install && npm run dev
 
 브라우저에서 `http://localhost:5173` 을 연다. Vite가 `/api` 를 8080으로 프록시하므로 CORS 설정 없이 동작한다.
 
+### API 문서 (Swagger)
+
+백엔드를 띄운 뒤 아래 주소로 들어가면 API 를 브라우저에서 바로 호출해 볼 수 있다.
+
+| | 주소 |
+|---|---|
+| Swagger UI | http://localhost:8080/swagger-ui.html |
+| OpenAPI JSON | http://localhost:8080/v3/api-docs |
+
+프론트 없이 백엔드만 확인할 때 유용하다. `POST /api/analyze` 는 `image` 에
+`data:image/jpeg;base64,...` 형태의 data URL 을 넣어야 한다.
+
+> **springdoc 은 3.x 를 써야 한다.** 2.x 는 Spring Boot 3 / Jackson 2 전용이라
+> 이 프로젝트(Boot 4 / Jackson 3)에서는 동작하지 않는다.
+>
+> `ResponseEntity<?>` 처럼 와일드카드를 반환하는 핸들러는 springdoc 이 타입을 추론하지 못해
+> 응답 스키마가 문서에서 통째로 빠진다. `@ApiResponse(content = @Content(schema = ...))` 로
+> 명시할 것 (`/api/recommend` 가 이 경우다).
+
 > **카메라는 `localhost` 또는 https 에서만 열린다.** LAN IP(`192.168.x.x`)로 접속하면
 > 브라우저가 `getUserMedia` 를 막는다. 다른 기기에서 테스트하려면 https 터널이 필요하다.
 
@@ -139,7 +158,8 @@ PRD §1.1의 "AI 출력 비공개" 원칙상 우측 패널은 고객 화면에�
 
 ```
 Back/
-  config/MoodMirrorProperties     설정 바인딩 (LLM · CORS · 세션 TTL)
+  config/MoodMirrorProperties     설정 바인딩 (LLM · 음원 · CORS · 세션 TTL)
+  config/OpenApiConfig            Swagger 문서 메타 (제목 · 설명 · 서버)
   controller/MirrorController     POST /api/analyze · GET /api/recommend/{id} · GET /api/health
   service/LlmClient               OpenAI 호환 호출 + JSON Schema 강제 + 값 클램핑
   service/JamendoClient           무드 → CC 음원 검색 (⚠ 실제 키로 미검증)
