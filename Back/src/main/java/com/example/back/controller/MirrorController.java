@@ -1,5 +1,6 @@
 package com.example.back.controller;
 
+import com.example.back.service.SessionNotFoundException;
 import com.example.back.dto.ApiPayloads.AnalyzeRequest;
 import com.example.back.dto.ApiPayloads.AnalyzeResponse;
 import com.example.back.dto.ApiPayloads.ErrorResponse;
@@ -121,21 +122,27 @@ public class MirrorController {
             @ApiResponse(responseCode = "404", description = "세션 만료 또는 없음 (기본 TTL 15분)",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    public ResponseEntity<?> recommend(
+    public ResponseEntity<RecommendResponse> recommend(
             @Parameter(description = "`/api/analyze` 응답의 sessionId", required = true)
             @PathVariable String sessionId) {
-        return mirror.recommend(sessionId)
-                .<ResponseEntity<?>>map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(new ErrorResponse("session_not_found",
-                                "세션이 만료되었거나 존재하지 않습니다. 다시 촬영해 주세요.")));
+
+        RecommendResponse response = mirror.recommend(sessionId)
+                .orElseThrow(() -> new SessionNotFoundException(
+                        "세션이 만료되었거나 존재하지 않습니다. 다시 촬영해 주세요."
+                ));
+
+        return ResponseEntity.ok(response);
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorResponse> badRequest(IllegalArgumentException e) {
-        // 예외 메시지에 이미지 원문이 실리지 않도록 MirrorService 에서 정제한 메시지만 사용한다.
-        log.warn("bad request: {}", e.getMessage());
-        return ResponseEntity.badRequest().body(new ErrorResponse("bad_request", e.getMessage()));
+    @ExceptionHandler(SessionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> sessionNotFound(
+            SessionNotFoundException e) {
+
+        return ResponseEntity.status(404)
+                .body(new ErrorResponse(
+                        "session_not_found",
+                        e.getMessage()
+                ));
     }
 
     @ExceptionHandler(Exception.class)
