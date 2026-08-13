@@ -2,20 +2,16 @@ package com.example.back.dto;
 
 import java.util.List;
 
-/** 프론트와 주고받는 요청/응답 페이로드 묶음. */
+/**
+ * <b>고객 미러 화면(/api/mirror/**)이 주고받는 페이로드.</b>
+ * <p>
+ * 직원 화면 페이로드는 {@link StaffPayloads} 에 따로 있다. 한 파일에 두면
+ * 고객 응답에 추천 필드를 얹는 일이 언젠가 반드시 생긴다. 파일이 갈라져 있으면
+ * 최소한 그 순간에 손이 멈춘다.
+ */
 public final class ApiPayloads {
 
     private ApiPayloads() {
-    }
-
-    /**
-     * 분석 요청. {@code image} 는 {@code data:image/jpeg;base64,...} 형태의 data URL.
-     * <p>
-     * multipart 대신 JSON 을 쓰는 이유: multipart 는 임계값을 넘으면 서블릿 컨테이너가
-     * 디스크에 임시 파일을 만든다. "이미지를 저장하지 않는다"(PRD §16.3)를 지키려면
-     * 디스크 경로 자체를 만들지 않는 편이 확실하다.
-     */
-    public record AnalyzeRequest(String sessionId, String image) {
     }
 
     /**
@@ -29,26 +25,16 @@ public final class ApiPayloads {
     }
 
     /**
-     * 고객 미러 화면용 세션 상태. 폴링과 상태 변화 확인에 쓴다.
+     * 분석 요청. {@code image} 는 {@code data:image/jpeg;base64,...} 형태의 data URL.
      * <p>
-     * <b>이 레코드에 제품 추천 필드를 추가하지 말 것.</b> 고객 화면에 AI 추천을
-     * 노출하지 않는 것이 이 서비스의 설계 원칙이며, 같은 서버를 쓰는 이상
-     * 응답 DTO 분리가 그 원칙을 지키는 장치다.
-     *
-     * @param musicDucked  직원 응대가 시작돼 음악 볼륨을 낮춰야 하는지.
-     *                     클라이언트가 상태로 추론하지 않도록 서버가 직접 알려준다
-     * @param assistStaffName 응대 중인 직원 이름. 고객 화면의 안내 문구에 쓴다
+     * sessionId 는 경로 변수로 받으므로 본문에 없다. 양쪽에 두면 서로 다른 값이
+     * 들어왔을 때 무엇을 믿을지가 애매해진다.
+     * <p>
+     * multipart 대신 JSON 을 쓰는 이유: multipart 는 임계값을 넘으면 서블릿 컨테이너가
+     * 디스크에 임시 파일을 만든다. "이미지를 저장하지 않는다"를 지키려면
+     * 디스크 경로 자체를 만들지 않는 편이 확실하다.
      */
-    public record SessionStateResponse(
-            String sessionId,
-            String state,
-            long elapsedSeconds,
-            MoodAnalysis analysis,
-            MusicTrack track,
-            boolean fallback,
-            boolean musicDucked,
-            String assistStaffName
-    ) {
+    public record AnalyzeRequest(String image) {
     }
 
     /**
@@ -65,7 +51,34 @@ public final class ApiPayloads {
     ) {
     }
 
-    /** 추천 응답. 실제 서비스에서는 직원 단말로만 전달된다. (PRD §1.1) */
+    /**
+     * 고객 미러 화면용 세션 상태. 폴링과 상태 변화 확인에 쓴다.
+     * <p>
+     * <b>이 레코드에 제품 추천 필드를 추가하지 말 것.</b> 고객 화면에 AI 추천을
+     * 노출하지 않는 것이 이 서비스의 설계 원칙이며, 같은 서버를 쓰는 이상
+     * 응답 DTO 분리가 그 원칙을 지키는 장치다.
+     *
+     * @param musicDucked     직원 응대가 시작돼 음악 볼륨을 낮춰야 하는지.
+     *                        클라이언트가 상태로 추론하지 않도록 서버가 직접 알려준다
+     * @param assistStaffName 응대 중인 직원 이름. 고객 화면의 안내 문구에 쓴다
+     */
+    public record SessionStateResponse(
+            String sessionId,
+            String state,
+            long elapsedSeconds,
+            MoodAnalysis analysis,
+            MusicTrack track,
+            boolean fallback,
+            boolean musicDucked,
+            String assistStaffName
+    ) {
+    }
+
+    /**
+     * 제품 추천. <b>직원 화면으로만 나간다.</b>
+     * {@link StaffPayloads.StaffCard} 안에 실려 전달되며 고객 경로에는 이 응답을
+     * 반환하는 엔드포인트가 존재하지 않는다.
+     */
     public record RecommendResponse(
             String sessionId,
             List<CategoryRecommendation> recommendations,

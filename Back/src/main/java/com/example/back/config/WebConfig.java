@@ -34,12 +34,7 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedMethods("GET", "OPTIONS")
                 .maxAge(3600);
 
-        registry.addMapping("/api/analyze")
-                .allowedOrigins(origins)
-                .allowedMethods("POST", "OPTIONS")
-                .maxAge(3600);
-
-        registry.addMapping("/api/sessions/**")
+        registry.addMapping("/api/mirror/**")
                 .allowedOrigins(origins)
                 .allowedMethods("GET", "POST", "OPTIONS")
                 .maxAge(3600);

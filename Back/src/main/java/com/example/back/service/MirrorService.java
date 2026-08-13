@@ -54,9 +54,12 @@ public class MirrorService {
      * 저장은 호출자(MirrorController)가 담당한다.
      */
     public AnalyzeResponse analyze(Session session, String dataUrl) {
-        session.startAnalysis();
-
+        // 디코딩을 상태 전이보다 먼저 한다. 순서가 반대면 깨진 이미지를 받은 세션이
+        // ANALYZING 에 갇힌다 — 거기서 갈 수 있는 곳은 MOOD_ACTIVE 뿐이라
+        // 재촬영 요청이 영원히 409 로 막히고 고객은 처음부터 다시 해야 한다.
         byte[] image = decode(dataUrl);
+
+        session.startAnalysis();
 
         Optional<MoodAnalysis> fromLlm = llm.analyzeMood(image);
         boolean fallback = fromLlm.isEmpty();

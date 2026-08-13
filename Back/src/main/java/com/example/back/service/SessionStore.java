@@ -75,10 +75,30 @@ public class SessionStore {
         return Optional.of(session);
     }
 
-    /** 상태별 조회. 직원 화면의 대기 목록이 이 메서드를 쓴다. */
+    /** 상태별 조회. */
     public List<Session> findByState(SessionState state) {
         return sessions.values().stream()
                 .filter(s -> s.state() == state)
+                .toList();
+    }
+
+    /**
+     * 직원 화면 목록에 올라가야 할 세션들. 판정 기준은 {@link SessionState#isStaffVisible()} 이다.
+     * <p>
+     * 훑기 전에 {@link #evictIdle()} 을 한 번 돌린다. 원래 만료 정리는 세션 생성 시점에만
+     * 일어나는데, 매장이 한산하면 다음 손님이 올 때까지 아무도 그 경로를 밟지 않아
+     * 떠난 고객의 도움 요청이 대기 목록에 계속 남는다. 직원 화면은 몇 초 간격으로
+     * 폴링하므로 지금은 이 조회가 사실상의 청소부 역할을 한다.
+     * <p>
+     * 스케줄러가 생기면 이 호출은 빼야 한다. 조회가 상태를 바꾸는 것은 임시방편이다.
+     */
+    public List<Session> findStaffVisible() {
+        evictIdle();
+        return sessions.values().stream()
+                // isStaffVisible() 은 종료 상태도 true 로 본다. 직원 BE 에 "이 세션은 끝났으니
+                // 알림을 내려라"를 통지해야 하기 때문인데, 그건 푸시의 사정이지 목록의 사정이
+                // 아니다. 떠난 고객을 대기 목록에 남기면 직원이 없는 손님을 찾아간다.
+                .filter(s -> !s.state().isTerminal() && s.state().isStaffVisible())
                 .toList();
     }
 
@@ -114,7 +134,10 @@ public class SessionStore {
      */
     public void evictIdle() {
         sessions.values().stream()
-                .filter(s -> s.isIdleFor(idleTimeout))
+                // 종료 상태도 같이 걷는다. reset()/timeout() 직후의 save() 는 EXPIRED 세션을
+                // 맵에 도로 넣는데, isIdleFor() 는 종료 상태에서 항상 false 라 그것만으로는
+                // 영원히 안 걸린다. 지금까지는 누군가 get() 으로 그 id 를 조회해야만 사라졌다.
+                .filter(s -> s.state().isTerminal() || s.isIdleFor(idleTimeout))
                 .toList()
                 .forEach(this::expire);
     }

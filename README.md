@@ -33,15 +33,16 @@ cd Front && npm install && npm run dev
 | Swagger UI | http://localhost:8080/swagger-ui.html |
 | OpenAPI JSON | http://localhost:8080/v3/api-docs |
 
-프론트 없이 백엔드만 확인할 때 유용하다. `POST /api/analyze` 는 `image` 에
+프론트 없이 백엔드만 확인할 때 유용하다. 문서는 `1. 고객 미러` / `2. 직원 응대` 로
+묶여 있어 자기 파트만 보면 된다. `analyze` 는 `image` 에
 `data:image/jpeg;base64,...` 형태의 data URL 을 넣어야 한다.
 
 > **springdoc 은 3.x 를 써야 한다.** 2.x 는 Spring Boot 3 / Jackson 2 전용이라
 > 이 프로젝트(Boot 4 / Jackson 3)에서는 동작하지 않는다.
 >
 > `ResponseEntity<?>` 처럼 와일드카드를 반환하는 핸들러는 springdoc 이 타입을 추론하지 못해
-> 응답 스키마가 문서에서 통째로 빠진다. `@ApiResponse(content = @Content(schema = ...))` 로
-> 명시할 것 (`/api/recommend` 가 이 경우다).
+> 응답 스키마가 문서에서 통째로 빠진다. 지금은 컨트롤러가 구체 타입을 반환하고
+> 예외 변환을 `ApiExceptionHandler` 가 맡으므로 이 문제가 없다.
 
 > **카메라는 `localhost` 또는 https 에서만 열린다.** LAN IP(`192.168.x.x`)로 접속하면
 > 브라우저가 `getUserMedia` 를 막는다. 다른 기기에서 테스트하려면 https 터널이 필요하다.
@@ -125,32 +126,51 @@ OpenAI 호환 엔드포인트라면 `LLM_BASE_URL` 만 바꿔도 되고,
 
 ## 흐름
 
+API 는 **고객용과 직원용 두 경로로 갈라져 있다.** 고객이 도달 가능한 경로에는
+제품 추천을 돌려주는 엔드포인트가 존재하지 않는다. 이게 이 서비스의 설계 원칙이
+"프론트가 안 부르기로 한 약속"이 아니라 구조적 사실이 되는 지점이다.
+
 ```
-[대기]  시작 버튼 (촬영 동의 문구)
-   ↓
-[카운트다운]  3 · 2 · 1
-   ↓
-[캡처]  video → canvas → JPEG data URL (긴 변 1024px)
-   ↓
-POST /api/analyze          ← 1차 Vision. 이미지는 RAM에서만 처리되고 폐기된다.
-   ↓
-[연출]  조명 전환 + 음향 페이드인 (같은 transitionMs 로 동시에)
-   ↓
-GET /api/recommend/{id}    ← 2차 추천. 연출이 시작된 뒤 백그라운드로 호출되어
-   ↓                          지연이 고객에게 보이지 않는다.
-[STAFF VIEW]  카테고리별 3종 + 순위 + 근거
+고객 미러 (/api/mirror/**)                    직원 단말 (/api/staff/**)
+──────────────────────────                    ──────────────────────────
+POST   /sessions                              GET  /sessions
+  ↓ mirrorId·storeId 필수                       ↑ 3초 폴링. 대기 순으로 정렬
+POST   /sessions/{id}/consent                   │ 추천은 안 실린다(폴링 비용)
+  ↓ 이후 3·2·1 은 클라이언트에서만              │
+POST   /sessions/{id}/analyze  ─── 5~7초 ───▶  │
+  ↓ 이미지는 RAM 에서만 처리되고 폐기          │
+[연출] 조명 + 음향 동시 페이드인               │
+  ↓                                            │
+POST   /sessions/{id}/assist-request  ────────▶│ needsAssist: true
+       /sessions/{id}/self-browse    ────────▶ │ needsAssist: false
+                                               ↓
+                                        GET  /sessions/{id}
+                                          무드·팔레트·컨셉명 + 카테고리별 3종
+                                          (세션당 1회만 계산 후 캐시)
+                                               ↓
+GET    /sessions/{id}  ◀──────────────  POST /sessions/{id}/accept
+  musicDucked: true                       다른 직원이 점유 중이면 409
+  볼륨만 낮추고 조명은 유지               POST /sessions/{id}/release
 ```
+
+### 두 경로를 갈라 놓은 장치
+
+| 장치 | 하는 일 |
+|---|---|
+| 컨트롤러 분리 | `CustomerMirrorController` 에는 추천을 돌려주는 메서드가 없다 |
+| 서비스 분리 | `CustomerSessionService` 는 `MirrorService.recommend()` 를 호출하지 않는다 |
+| DTO 파일 분리 | 추천이 실리는 레코드는 `StaffPayloads` 에만 있다 |
+| CORS | 고객 프론트 출처에는 `/api/mirror/**` 만 열려 있다 (`WebConfig`) |
 
 ### 화면 구성
 
-| 영역 | 내용 | 실서비스에서는 |
+| 화면 | 내용 | 상태 |
 |---|---|---|
-| 좌측 (미러) | 조명·음악·컨셉명 — **감각** | 대형 디스플레이 |
-| 우측 (STAFF VIEW) | 분석 결과·추천 3종·근거 — **지능** | **직원 단말(`/staff`)로 분리.** 고객에게 보이지 않는다 |
+| 미러 디스플레이 | 조명·음악·컨셉명 — **감각** | 프로토타입 존재 (세션 API 미대응) |
+| 직원 태블릿 | 무드·팔레트·추천 3종·근거 — **지능** | **미착수.** 현재 `StaffPanel` 이 고객 앱 안에 있다 |
 
-지금 한 창에 같이 있는 것은 파이프라인 검증 편의를 위해서다.
-PRD §1.1의 "AI 출력 비공개" 원칙상 우측 패널은 고객 화면에서 떼어내야 한다 —
-`StaffPanel` 컴포넌트를 별도 라우트로 옮기기만 하면 된다.
+백엔드는 갈라졌지만 프론트는 아직 한 앱이다. `StaffPanel` 을 별도 라우트로 떼어내는
+것이 남은 작업이며, 그 전까지 고객 화면 코드에서 직원용 응답을 부를 수 있다.
 
 ---
 
@@ -160,7 +180,12 @@ PRD §1.1의 "AI 출력 비공개" 원칙상 우측 패널은 고객 화면에�
 Back/
   config/MoodMirrorProperties     설정 바인딩 (LLM · 음원 · CORS · 세션 TTL)
   config/OpenApiConfig            Swagger 문서 메타 (제목 · 설명 · 서버)
-  controller/MirrorController     POST /api/analyze · GET /api/recommend/{id} · GET /api/health
+  controller/CustomerMirrorController  /api/mirror/**  — 고객 파트 담당
+  controller/StaffController          /api/staff/**   — 직원 파트 담당
+  controller/HealthController         /api/health     — 공통
+  controller/ApiExceptionHandler      예외 → HTTP 상태 변환 (양쪽 공유)
+  service/CustomerSessionService  세션 전이 오케스트레이션. 추천에 닿지 않는다.
+  service/StaffService            대기 목록 · 응대 카드 · 중복 응대 판정 · 추천 캐시
   service/LlmClient               OpenAI 호환 호출 + JSON Schema 강제 + 값 클램핑
   service/JamendoClient           무드 → CC 음원 검색 (⚠ 실제 키로 미검증)
   service/CatalogService          카탈로그 로딩 + 룰 프리필터 스코어링
