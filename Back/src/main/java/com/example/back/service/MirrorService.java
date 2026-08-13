@@ -1,5 +1,6 @@
 package com.example.back.service;
 
+import com.example.back.domain.Session;
 import com.example.back.dto.ApiPayloads.AnalyzeResponse;
 import com.example.back.dto.ApiPayloads.RecommendResponse;
 import com.example.back.dto.CategoryRecommendation;
@@ -32,21 +33,33 @@ public class MirrorService {
 
     private final LlmClient llm;
     private final CatalogService catalog;
-    private final SessionStore sessions;
     private final JamendoClient jamendo;
 
-    public MirrorService(LlmClient llm, CatalogService catalog, SessionStore sessions,
+    public MirrorService(LlmClient llm, CatalogService catalog,
                          JamendoClient jamendo) {
         this.llm = llm;
         this.catalog = catalog;
-        this.sessions = sessions;
         this.jamendo = jamendo;
     }
 
     // ------------------------------------------------------------------ 1차
 
-    public AnalyzeResponse analyze(String dataUrl) {
+    /**
+     * 분석용 스틸컷을 받아 조명·음향 연출을 만든다.
+     * <p>
+     * 세션은 이미 열려 있는 상태로 들어온다. 기존에는 이 메서드가 sessionId 를 발급했지만,
+     * 직원 알림에 어느 미러인지가 필요해 세션 생성을 앞으로 당겼다.
+     * <p>
+     * 상태 전이는 {@code startAnalysis()} → {@code applyMood()} 두 번 일어나며,
+     * 저장은 호출자(MirrorController)가 담당한다.
+     */
+    public AnalyzeResponse analyze(Session session, String dataUrl) {
+        // 디코딩을 상태 전이보다 먼저 한다. 순서가 반대면 깨진 이미지를 받은 세션이
+        // ANALYZING 에 갇힌다 — 거기서 갈 수 있는 곳은 MOOD_ACTIVE 뿐이라
+        // 재촬영 요청이 영원히 409 로 막히고 고객은 처음부터 다시 해야 한다.
         byte[] image = decode(dataUrl);
+
+        session.startAnalysis();
 
         Optional<MoodAnalysis> fromLlm = llm.analyzeMood(image);
         boolean fallback = fromLlm.isEmpty();
@@ -55,22 +68,22 @@ public class MirrorService {
         // 고객 화면에 노출되는 유일한 LLM 텍스트이므로 제품 언급이 섞이지 않았는지 확인한다.
         analysis = stripProductMentions(analysis);
 
-        // image 참조를 여기서 끊는다. 세션에는 분석 결과만 들어간다.
-        String sessionId = sessions.put(analysis, fallback);
-
         // 음원은 조명과 동시에 시작해야 하므로 이 응답에 실어 보낸다.
         // 실패해도 track=null 로 내려보내고 프론트가 절차적 앰비언스로 받는다.
         MusicTrack track = selectTrack(analysis);
+
+        // image 참조를 여기서 끊는다. 세션에는 분석 결과만 들어간다.
+        session.applyMood(analysis, track, fallback);
 
         String note = fallback
                 ? (llm.isMock() ? "mock 모드 — 폴백 프리셋 사용 중 (API 키 미설정)" : "LLM 분석 실패 — 폴백 프리셋 적용")
                 : null;
 
         log.info("analyze done sessionId={} concept='{}' fallback={} track={}",
-                sessionId, analysis.conceptName(), fallback,
+                session.id(), analysis.conceptName(), fallback,
                 track == null ? "none(synth)" : track.title());
 
-        return new AnalyzeResponse(sessionId, analysis, track, fallback, note);
+        return new AnalyzeResponse(session.id(), analysis, track, fallback, note);
     }
 
     /**
@@ -110,9 +123,16 @@ public class MirrorService {
 
     // ------------------------------------------------------------------ 2차
 
-    public Optional<RecommendResponse> recommend(String sessionId) {
-        return sessions.get(sessionId).map(entry -> {
-            MoodAnalysis analysis = entry.analysis();
+    /**
+     * 제품 추천. <b>직원 화면 전용이며 고객용 컨트롤러에서 호출하지 않는다.</b>
+     * <p>
+     * 호출할 때마다 LLM 랭킹이 새로 도므로 직원 쪽에서 결과를 캐시해야 한다.
+     * 무료 등급은 분당 3회 제한이라 폴링하면 바로 429 가 나고, 폴백이 조용히
+     * 받아버려 화면상으로는 정상처럼 보인다.
+     */
+    public Optional<RecommendResponse> recommend(Session session) {
+        return session.analysis().map(analysis -> {
+            String sessionId = session.id();
             Outfit outfit = analysis.outfit();
 
             Map<String, List<Product>> candidates = catalog.prefilter(outfit);
