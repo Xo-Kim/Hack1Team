@@ -4,7 +4,7 @@
 
 | 문서 | 내용 |
 |---|---|
-| [PRD](PRD_MCM_Mood_Mirror.md) | 문제 정의 · 브랜드 전략 · 시장 논거 · KPI |
+| [PRD](docs/PRD_MCM_Mood_Mirror.md) | 문제 정의 · 브랜드 전략 · 시장 논거 · KPI |
 | [docs/API_SPEC.md](docs/API_SPEC.md) | **엔드포인트 계약 · 세션 상태 · 오류 코드** |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 시스템 구성 · 카탈로그 · 추천 로직 · 폴백 |
 | [docs/LLM_SPEC.md](docs/LLM_SPEC.md) | LLM 3회 호출 스펙 |
@@ -140,17 +140,18 @@ API 는 **고객용과 직원용 두 경로로 갈라져 있다.** 고객이 도
 ```
 고객 미러 (/api/mirror/**)                    직원 단말 (/api/staff/**)
 ──────────────────────────                    ──────────────────────────
-POST   /sessions                              GET  /sessions
-  ↓ mirrorId·storeId 필수                       ↑ 3초 폴링. 대기 순으로 정렬
-POST   /sessions/{id}/consent                   │ 추천은 안 실린다(폴링 비용)
+                                              GET  /notifications  (SSE)
+POST   /sessions                                ↑ 상시 구독. 폴백은 목록 폴링
+  ↓ mirrorId·storeId 필수                       │
+POST   /sessions/{id}/consent                   │
   ↓ 이후 3·2·1 은 클라이언트에서만              │
-POST   /sessions/{id}/analyze  ─── 5~7초 ───▶  │
+POST   /sessions/{id}/analyze  ─── 3~7초 ───▶  │  (앞단 전이는 알림 없음)
   ↓ 이미지는 RAM 에서만 처리되고 폐기          │
 [연출] 조명 + 음향 동시 페이드인               │
   ↓                                            │
-POST   /sessions/{id}/assist-request  ────────▶│ needsAssist: true
-       /sessions/{id}/self-browse    ────────▶ │ needsAssist: false
-                                               ↓
+POST   /sessions/{id}/assist-request  ══push══▶│ event: assist_requested
+       /sessions/{id}/self-browse     ══push══▶│ event: self_browsing
+                                               ↓  60초 미확인 → 재알림
                                         GET  /sessions/{id}
                                           무드·팔레트·컨셉명 + 카테고리별 3종
                                           (세션당 1회만 계산 후 캐시)
@@ -158,7 +159,12 @@ POST   /sessions/{id}/assist-request  ────────▶│ needsAssist
 GET    /sessions/{id}  ◀──────────────  POST /sessions/{id}/accept
   musicDucked: true                       다른 직원이 점유 중이면 409
   볼륨만 낮추고 조명은 유지               POST /sessions/{id}/release
+                                          POST /sessions/{id}/complete → ENDED
 ```
+
+**알림은 SSE 푸시다.** 서버 → 직원 단방향이라 WebSocket 을 쓰지 않았다. 일반 HTTP 라
+매장 방화벽을 그대로 통과하고 끊기면 브라우저가 알아서 재연결한다. 실측 전달 0.4초.
+스트림이 막혀도 `GET /api/staff/sessions` 폴링이 폴백으로 남아 있다.
 
 ### 두 경로를 갈라 놓은 장치
 
@@ -193,12 +199,14 @@ Back/
   controller/ApiExceptionHandler      예외 → HTTP 상태 변환 (양쪽 공유)
   service/CustomerSessionService  세션 전이 오케스트레이션. 추천에 닿지 않는다.
   service/StaffService            대기 목록 · 응대 카드 · 중복 응대 판정 · 추천 캐시
+  service/StaffNotifier           SSE 알림 발신 · 60초 재알림 · 하트비트
+  service/SessionReaper           만료 세션 주기 정리 (@Scheduled)
   service/LlmClient               OpenAI 호환 호출 + JSON Schema 강제 + 값 클램핑
   service/JamendoClient           무드 → CC 음원 검색 (⚠ 실제 키로 미검증)
   service/CatalogService          카탈로그 로딩 + 룰 프리필터 스코어링
   service/MirrorService           파이프라인 조립 + 제품 ID 재검증
   service/FallbackPresets         프리셋 5종 (이미지 해시로 결정 → 같은 사진은 같은 결과)
-  service/SessionStore            인메모리 세션. 이미지는 담지 않는다.
+  service/SessionStore            인메모리 세션 + 전이 이벤트 발행. 이미지는 담지 않는다.
   resources/catalog.json          MCM 실제 제품 44종 (가방15/지갑15/벨트14)
 
 Front/
@@ -340,7 +348,7 @@ Jamendo 의 CC 라이선스는 대부분 저작자 표시(BY)를 요구한다. �
 | PRD 기능 | 상태 |
 |---|---|
 | F-7 분기 선택 (직원 도움 / 혼자 볼게요) | 컨셉 카드의 버튼으로 축약. 정식 분기 화면 없음 |
-| F-9 직원 실시간 알림 | **없음.** 직원 화면이 목록을 폴링하는 방식 |
+| F-9 직원 실시간 알림 | **완료.** SSE 푸시 + 60초 재알림. 폴링은 폴백으로 유지 |
 | F-10 직원 화면 (별도 라우트) | **백엔드만 완료.** 프론트는 아직 고객 앱 안에 있음 |
 | F-11 응대 모드 | 백엔드 `musicDucked` 제공. 프론트 연동 전 |
 | F-14 리셋 (타임아웃) | 프론트 로컬만. **서버 리셋 호출 미연동** |

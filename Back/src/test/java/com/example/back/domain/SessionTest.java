@@ -116,8 +116,6 @@ class SessionTest {
         session.requestAssist();
         clock.advance(Duration.ofSeconds(18));
         session.acceptAssist(new StaffAssignment("staff-042", "김하늘", clock.instant()));
-        session.startCapture();
-        session.deliverPhoto("photo-001");
         session.complete();
 
         assertThat(session.state()).isEqualTo(SessionState.ENDED);
@@ -128,13 +126,11 @@ class SessionTest {
                 SessionState.MOOD_ACTIVE,
                 SessionState.ASSIST_REQUESTED,
                 SessionState.ASSIST_ACCEPTED,
-                SessionState.CAPTURING,
-                SessionState.DELIVERED,
                 SessionState.ENDED);
     }
 
     @Test
-    @DisplayName("혼자 볼게요를 선택해도 촬영까지 이어진다")
+    @DisplayName("혼자 볼게요를 선택한 세션도 정상 종료로 닫을 수 있다")
     void selfBrowsingPath() {
         Session session = newSession();
 
@@ -142,10 +138,33 @@ class SessionTest {
         session.startAnalysis();
         session.applyMood(analysis(), track(), false);
         session.browseAlone();
-        session.startCapture();
+        session.complete();
 
-        assertThat(session.state()).isEqualTo(SessionState.CAPTURING);
+        assertThat(session.state()).isEqualTo(SessionState.ENDED);
+        assertThat(session.endReason()).contains(EndReason.COMPLETED);
         assertThat(session.assignedStaff()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("정상 종료와 타임아웃은 다른 종료 사유로 남는다")
+    void completedAndTimeoutAreDistinguishable() {
+        Session completed = newSession();
+        completed.consent();
+        completed.startAnalysis();
+        completed.applyMood(analysis(), track(), false);
+        completed.complete();
+
+        Session abandoned = newSession();
+        abandoned.consent();
+        abandoned.startAnalysis();
+        abandoned.applyMood(analysis(), track(), false);
+        abandoned.timeout();
+
+        // 핵심 지표가 완주 세션 수라 이 둘이 같은 상태로 뭉치면 안 된다.
+        assertThat(completed.state()).isEqualTo(SessionState.ENDED);
+        assertThat(abandoned.state()).isEqualTo(SessionState.EXPIRED);
+        assertThat(completed.endReason()).contains(EndReason.COMPLETED);
+        assertThat(abandoned.endReason()).contains(EndReason.TIMEOUT);
     }
 
     @Test
@@ -299,8 +318,8 @@ class SessionTest {
     // ------------------------------------------------------------------ 지표
 
     @Test
-    @DisplayName("직원 도달 시간은 요청과 응대 시작의 차이로 산출된다")
-    void measuresTimeToStaffArrival() {
+    @DisplayName("이벤트 시각만으로 지표를 되짚을 수 있다")
+    void eventTimestampsSupportMetrics() {
         Session session = newSession();
         session.consent();
         session.startAnalysis();
@@ -309,19 +328,19 @@ class SessionTest {
         clock.advance(Duration.ofSeconds(42));
         session.acceptAssist(new StaffAssignment("staff-042", "김하늘", clock.instant()));
 
-        assertThat(session.timeToStaffArrival()).contains(Duration.ofSeconds(42));
+        // 도달 시간을 계산해 주는 메서드는 두지 않는다. 세션은 TTL 로 사라지지만
+        // 이벤트는 남으므로, 지표는 이벤트 로그에서 뽑는 것이 맞는 자리다.
+        Instant requested = eventTo(session, SessionState.ASSIST_REQUESTED).occurredAt();
+        Instant accepted = eventTo(session, SessionState.ASSIST_ACCEPTED).occurredAt();
+
+        assertThat(Duration.between(requested, accepted)).isEqualTo(Duration.ofSeconds(42));
     }
 
-    @Test
-    @DisplayName("응대 전에는 도달 시간을 산출할 수 없다")
-    void noArrivalTimeBeforeAccept() {
-        Session session = newSession();
-        session.consent();
-        session.startAnalysis();
-        session.applyMood(analysis(), track(), false);
-        session.requestAssist();
-
-        assertThat(session.timeToStaffArrival()).isEmpty();
+    private static SessionEvent eventTo(Session session, SessionState state) {
+        return session.events().stream()
+                .filter(e -> e.to() == state)
+                .findFirst()
+                .orElseThrow();
     }
 
     @Test
@@ -426,13 +445,8 @@ class SessionTest {
                         SessionState.ASSIST_ACCEPTED);
                 case SELF_BROWSING -> List.of(SessionState.CONSENTED, SessionState.ANALYZING,
                         SessionState.MOOD_ACTIVE, SessionState.SELF_BROWSING);
-                case CAPTURING -> List.of(SessionState.CONSENTED, SessionState.ANALYZING,
-                        SessionState.MOOD_ACTIVE, SessionState.CAPTURING);
-                case DELIVERED -> List.of(SessionState.CONSENTED, SessionState.ANALYZING,
-                        SessionState.MOOD_ACTIVE, SessionState.CAPTURING, SessionState.DELIVERED);
                 case ENDED -> List.of(SessionState.CONSENTED, SessionState.ANALYZING,
-                        SessionState.MOOD_ACTIVE, SessionState.CAPTURING, SessionState.DELIVERED,
-                        SessionState.ENDED);
+                        SessionState.MOOD_ACTIVE, SessionState.ENDED);
                 case EXPIRED -> List.of(SessionState.EXPIRED);
             };
         }

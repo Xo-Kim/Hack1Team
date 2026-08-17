@@ -24,6 +24,9 @@ dependencies {
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0'
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // Boot 4 에서 starter-test 가 웹 계층 테스트 지원을 더 이상 끌어오지 않는다.
+    // MockMvc(@AutoConfigureMockMvc)를 쓰려면 이 모듈이 따로 필요하다.
+    testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

@@ -12,7 +12,7 @@ import java.util.Objects;
  * <ul>
  *   <li>직원 도달 시간 = ASSIST_ACCEPTED.occurredAt - ASSIST_REQUESTED.occurredAt</li>
  *   <li>무드 연출 완료율 = MOOD_ACTIVE 도달 세션 / CONSENTED 도달 세션</li>
- *   <li>촬영 실행률 = CAPTURING 도달 세션 / MOOD_ACTIVE 도달 세션</li>
+ *   <li>완주율 = ENDED 도달 세션 / MOOD_ACTIVE 도달 세션 (EXPIRED 는 이탈)</li>
  * </ul>
  */
 public record SessionEvent(

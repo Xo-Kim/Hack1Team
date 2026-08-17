@@ -121,6 +121,31 @@ public class StaffService {
         return toCard(session);
     }
 
+    /**
+     * 응대 완료. 세션을 정상 종료로 닫는다.
+     * <p>
+     * <b>타임아웃과 반드시 구분해야 하는 지점이다.</b> 핵심 지표가 완주 세션 수인데
+     * 종료 경로가 타임아웃 하나뿐이면 "응대를 마친 고객"과 "그냥 떠난 고객"이 같은
+     * 값으로 집계된다. 직원이 응대를 마쳤다고 눌러야 비로소 완주로 기록된다.
+     * <p>
+     * 점유 중이 아닌 세션도 닫을 수 있다. 고객이 혼자 보다가 그냥 간 것을 직원이
+     * 정리하는 경우가 있어서다. 다만 다른 직원이 점유 중이면 막는다.
+     */
+    public StaffCard complete(String sessionId, String staffId) {
+        Session session = require(sessionId);
+        if (staffId != null && !staffId.isBlank()) {
+            checkOwner(session, staffId);
+        }
+
+        session.complete();
+        sessions.save(session);
+        recommendationCache.remove(sessionId);
+
+        log.info("session completed sessionId={} staffId={} 경과 {}초",
+                session.id(), staffId, session.elapsedSeconds());
+        return toCard(session);
+    }
+
     // ------------------------------------------------------------------ 내부
 
     /** 점유자가 있고 그게 요청자가 아니면 거부한다. 점유자가 없으면 통과. */

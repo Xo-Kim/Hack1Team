@@ -2,9 +2,11 @@ package com.example.back.controller;
 
 import com.example.back.dto.ApiPayloads.ErrorResponse;
 import com.example.back.dto.StaffPayloads.AcceptAssistRequest;
+import com.example.back.dto.StaffPayloads.CompleteSessionRequest;
 import com.example.back.dto.StaffPayloads.ReleaseAssistRequest;
 import com.example.back.dto.StaffPayloads.StaffCard;
 import com.example.back.dto.StaffPayloads.StaffSessionSummary;
+import com.example.back.service.StaffNotifier;
 import com.example.back.service.StaffService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -14,12 +16,14 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 
@@ -40,9 +44,11 @@ import java.util.List;
 public class StaffController {
 
     private final StaffService staff;
+    private final StaffNotifier notifier;
 
-    public StaffController(StaffService staff) {
+    public StaffController(StaffService staff, StaffNotifier notifier) {
         this.staff = staff;
+        this.notifier = notifier;
     }
 
     @GetMapping("/sessions")
@@ -147,5 +153,68 @@ public class StaffController {
     public StaffCard release(@PathVariable String sessionId,
                              @RequestBody ReleaseAssistRequest request) {
         return staff.release(sessionId, request == null ? null : request.staffId());
+    }
+
+    @PostMapping("/sessions/{sessionId}/complete")
+    @Operation(
+            summary = "응대 완료 (세션 정상 종료)",
+            description = """
+                    세션을 `ENDED` 로 닫는다. 타임아웃으로 끝난 `EXPIRED` 와 구분된다.
+
+                    **이 구분이 핵심 지표를 만든다.** 완주 세션 수가 North Star 인데
+                    종료 경로가 타임아웃 하나뿐이면 "응대를 마친 고객"과 "그냥 떠난 고객"이
+                    같은 값으로 집계된다.
+
+                    `staffId` 는 선택이다. 넣으면 점유자 본인인지 확인하고, 비우면
+                    확인 없이 닫는다 — 고객이 혼자 보다 그냥 간 세션을 직원이 정리하는
+                    경우가 있어 필수로 두지 않았다.
+                    """)
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "종료됨. `state` 는 `ENDED`",
+                    content = @Content(schema = @Schema(implementation = StaffCard.class))),
+            @ApiResponse(responseCode = "404", description = "세션 만료 또는 없음",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "다른 직원이 점유 중",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public StaffCard complete(@PathVariable String sessionId,
+                              @RequestBody(required = false) CompleteSessionRequest request) {
+        return staff.complete(sessionId, request == null ? null : request.staffId());
+    }
+
+    @GetMapping(value = "/notifications", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(
+            summary = "실시간 알림 구독 (SSE)",
+            description = """
+                    직원 단말이 상태 변화를 실시간으로 받는 스트림이다.
+
+                    **WebSocket 이 아니라 SSE 인 이유**: 이 채널은 서버 → 직원 단방향이다.
+                    직원의 동작(응대 시작·해제)은 이미 REST 로 올라가므로 양방향이 필요 없다.
+                    SSE 는 일반 HTTP 라 매장 방화벽·프록시를 그대로 통과하고, 끊기면
+                    브라우저가 알아서 재연결한다.
+
+                    ### 이벤트 종류
+                    | `event` | 의미 |
+                    |---|---|
+                    | `connected` | 구독 성공. 현재 대기 건수를 함께 보낸다 |
+                    | `assist_requested` | 새 도움 요청. `reminder: true` 면 60초 초과 재알림 |
+                    | `assist_cancelled` | 고객이 요청을 철회 |
+                    | `assist_accepted` | 다른 직원이 응대 시작 — 중복 응대 방지 표시 |
+                    | `assist_released` | 직원이 응대를 놓음. 다시 대기열로 |
+                    | `self_browsing` | 고객이 혼자 보기를 선택. 접근하지 말 것 |
+                    | `session_closed` | 세션 종료. 알림을 내릴 것 |
+
+                    **알림에는 제품 추천이 실리지 않는다.** 추천은 세션당 한 번 LLM 랭킹을
+                    돌려야 하는 비싼 연산이라 알림마다 만들면 한도를 즉시 넘긴다.
+                    상세는 응대 카드를 열 때 가져간다.
+
+                    15초마다 주석(`:ping`)이 오는데 프록시가 유휴 연결을 끊는 것을 막기
+                    위한 것이며 이벤트 핸들러에는 잡히지 않는다.
+
+                    **이 스트림이 막혀도 직원 화면은 동작한다.** `GET /api/staff/sessions`
+                    폴링이 폴백으로 그대로 남아 있다.
+                    """)
+    public SseEmitter notifications() {
+        return notifier.subscribe();
     }
 }

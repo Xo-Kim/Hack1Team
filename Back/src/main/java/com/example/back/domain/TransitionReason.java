@@ -19,8 +19,6 @@ public enum TransitionReason {
     /** 고객이 요청을 철회함. */
     ASSIST_CANCELLED,
     SELF_BROWSE_SELECTED,
-    CAPTURE_STARTED,
-    PHOTO_DELIVERED,
     COMPLETED,
     /** 미러 화면에서 명시적으로 리셋됨. */
     RESET,

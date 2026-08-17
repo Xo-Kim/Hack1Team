@@ -83,4 +83,11 @@ public final class StaffPayloads {
     /** 응대 해제. 점유자 본인인지 확인하는 데만 쓴다. */
     public record ReleaseAssistRequest(String staffId) {
     }
+
+    /**
+     * 응대 완료. {@code staffId} 는 선택이며, 넣으면 점유자 본인인지 확인한다.
+     * 점유 없이 남은 세션을 직원이 정리하는 경우가 있어 필수로 두지 않았다.
+     */
+    public record CompleteSessionRequest(String staffId) {
+    }
 }

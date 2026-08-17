@@ -143,18 +143,12 @@ public class Session {
         this.assistRequestedAt = null;
     }
 
-    /** 4컷 촬영 시작. 현재 조명 연출이 적용된 상태로 진행한다. */
-    public void startCapture() {
-        transitionTo(SessionState.CAPTURING, TransitionReason.CAPTURE_STARTED, Map.of());
-    }
-
-    /** 사진 합성 및 QR 발급 완료. */
-    public void deliverPhoto(String photoId) {
-        transitionTo(SessionState.DELIVERED, TransitionReason.PHOTO_DELIVERED,
-                Map.of("photoId", String.valueOf(photoId)));
-    }
-
-    /** 정상 종료. */
+    /**
+     * 정상 종료. 응대를 마쳤거나 고객이 경험을 끝낸 경우다.
+     * <p>
+     * 타임아웃({@link #timeout()})과 반드시 구분해야 한다. 핵심 지표가 완주 세션 수라
+     * 둘을 같은 상태로 뭉치면 "경험을 마친 고객"과 "그냥 떠난 고객"이 섞인다.
+     */
     public void complete() {
         transitionTo(SessionState.ENDED, TransitionReason.COMPLETED, Map.of());
         this.endReason = EndReason.COMPLETED;
@@ -299,18 +293,7 @@ public class Session {
         return drained;
     }
 
-    /**
-     * 직원 도달 시간. 핵심 지표(p90 60초 미만) 산출에 쓰인다.
-     * 요청 후 아직 응대가 시작되지 않았으면 비어 있다.
-     */
-    public Optional<Duration> timeToStaffArrival() {
-        if (assistRequestedAt == null || assignedStaff == null) {
-            return Optional.empty();
-        }
-        return Optional.of(Duration.between(assistRequestedAt, assignedStaff.acceptedAt()));
-    }
-
-    /** 직원 BE 페이로드에 실을 경과 시간. 단말 시계를 쓰지 않는다. */
+    /** 응답에 실을 경과 시간. 단말 시계를 쓰지 않는다. */
     public long elapsedSeconds() {
         return Duration.between(startedAt, clock.instant()).toSeconds();
     }

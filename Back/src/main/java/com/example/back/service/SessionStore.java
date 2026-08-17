@@ -6,6 +6,7 @@ import com.example.back.domain.SessionEvent;
 import com.example.back.domain.SessionState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -48,16 +49,18 @@ public class SessionStore {
 
     private final Duration idleTimeout;
     private final Clock clock;
+    private final ApplicationEventPublisher publisher;
 
-    public SessionStore(MoodMirrorProperties props, Clock clock) {
+    public SessionStore(MoodMirrorProperties props, Clock clock,
+                        ApplicationEventPublisher publisher) {
         int minutes = props.session() == null ? 15 : props.session().ttlMinutes();
         this.idleTimeout = Duration.ofMinutes(minutes);
         this.clock = clock;
+        this.publisher = publisher;
     }
 
     /** 미러 대기 화면에서 세션을 연다. */
     public Session start(String mirrorId, String storeId, String mirrorLabel) {
-        evictIdle();
         Session session = Session.start(mirrorId, storeId, mirrorLabel, clock);
         sessions.put(session.id(), session);
         return session;
@@ -85,15 +88,9 @@ public class SessionStore {
     /**
      * 직원 화면 목록에 올라가야 할 세션들. 판정 기준은 {@link SessionState#isStaffVisible()} 이다.
      * <p>
-     * 훑기 전에 {@link #evictIdle()} 을 한 번 돌린다. 원래 만료 정리는 세션 생성 시점에만
-     * 일어나는데, 매장이 한산하면 다음 손님이 올 때까지 아무도 그 경로를 밟지 않아
-     * 떠난 고객의 도움 요청이 대기 목록에 계속 남는다. 직원 화면은 몇 초 간격으로
-     * 폴링하므로 지금은 이 조회가 사실상의 청소부 역할을 한다.
-     * <p>
-     * 스케줄러가 생기면 이 호출은 빼야 한다. 조회가 상태를 바꾸는 것은 임시방편이다.
+     * 조회는 상태를 바꾸지 않는다. 만료 정리는 {@link SessionReaper} 가 주기적으로 맡는다.
      */
     public List<Session> findStaffVisible() {
-        evictIdle();
         return sessions.values().stream()
                 // isStaffVisible() 은 종료 상태도 true 로 본다. 직원 BE 에 "이 세션은 끝났으니
                 // 알림을 내려라"를 통지해야 하기 때문인데, 그건 푸시의 사정이지 목록의 사정이
@@ -103,14 +100,27 @@ public class SessionStore {
     }
 
     /**
-     * 전이 이벤트를 회수해 로그에 적재한다.
+     * 전이 이벤트를 회수해 로그에 적재하고 알림으로 내보낸다.
      * <p>
      * 지금은 메모리에 쌓지만 Postgres 로 옮길 자리다. 세션은 사라져도 이벤트는 남아야
-     * 무드 연출 완료율·촬영 실행률·직원 도달 시간을 나중에 계산할 수 있다.
+     * 무드 연출 완료율·완주율·직원 도달 시간을 나중에 계산할 수 있다.
+     * <p>
+     * 알림 발행이 여기 있는 이유는 <b>빠지는 지점을 없애기 위해서</b>다. 서비스마다
+     * 알림을 부르게 하면 새 전이를 추가한 사람이 반드시 한 번은 잊는다. 모든 전이는
+     * 결국 이 메서드를 지나므로, 여기 한 곳에 두면 누락이 구조적으로 불가능해진다.
      */
     public void save(Session session) {
         sessions.put(session.id(), session);
-        eventLog.addAll(session.drainEvents());
+
+        List<SessionEvent> drained = session.drainEvents();
+        eventLog.addAll(drained);
+        publish(drained, session.mirrorLabel());
+    }
+
+    private void publish(List<SessionEvent> events, String mirrorLabel) {
+        for (SessionEvent event : events) {
+            publisher.publishEvent(new SessionTransitionEvent(event, mirrorLabel));
+        }
     }
 
     public void remove(String sessionId) {
@@ -127,19 +137,20 @@ public class SessionStore {
     }
 
     /**
-     * 무입력으로 방치된 세션을 만료시킨다.
-     * <p>
-     * 지금은 세션 생성 시점에만 훑지만, 미응대 알림을 제때 취소하려면 스케줄러가 필요하다.
-     * 고객이 자리를 떠도 다음 손님이 오기 전까지는 아무도 이 메서드를 호출하지 않기 때문이다.
+     * 무입력으로 방치된 세션과 이미 끝난 세션을 걷어낸다.
+     * {@link SessionReaper} 가 주기적으로 호출한다.
+     *
+     * @return 걷어낸 건수
      */
-    public void evictIdle() {
-        sessions.values().stream()
+    public int evictIdle() {
+        List<Session> targets = sessions.values().stream()
                 // 종료 상태도 같이 걷는다. reset()/timeout() 직후의 save() 는 EXPIRED 세션을
                 // 맵에 도로 넣는데, isIdleFor() 는 종료 상태에서 항상 false 라 그것만으로는
-                // 영원히 안 걸린다. 지금까지는 누군가 get() 으로 그 id 를 조회해야만 사라졌다.
+                // 영원히 안 걸린다.
                 .filter(s -> s.state().isTerminal() || s.isIdleFor(idleTimeout))
-                .toList()
-                .forEach(this::expire);
+                .toList();
+        targets.forEach(this::expire);
+        return targets.size();
     }
 
     private void expire(Session session) {
@@ -147,7 +158,11 @@ public class SessionStore {
             session.timeout();
             log.info("session expired sessionId={} mirrorId={}", session.id(), session.mirrorId());
         }
-        eventLog.addAll(session.drainEvents());
+        // 만료도 전이다. 알림을 내려야 직원 대기 목록에서 사라진다.
+        List<SessionEvent> drained = session.drainEvents();
+        eventLog.addAll(drained);
+        publish(drained, session.mirrorLabel());
+
         sessions.remove(session.id());
     }
 }

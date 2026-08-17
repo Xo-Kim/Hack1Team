@@ -1,6 +1,6 @@
 package com.example.back.domain;
 
-/** 직원 BE 의 /internal/v1/sessions/{id}/ended 페이로드에 실리는 종료 사유. */
+/** 세션이 어떻게 끝났는지. 완주와 이탈을 지표에서 구분하기 위해 남긴다. */
 public enum EndReason {
     COMPLETED, RESET, TIMEOUT
 }

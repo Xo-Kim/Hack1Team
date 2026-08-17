@@ -39,7 +39,8 @@ IDLE ──▶ CONSENTED ──▶ ANALYZING ──▶ MOOD_ACTIVE
                                           │
                                           └─▶ SELF_BROWSING ──▶ ASSIST_REQUESTED
 
-(종료 상태를 제외한 모든 상태) ──▶ EXPIRED     // 타임아웃 · 리셋
+(연출 이후 모든 상태) ──▶ ENDED       // 응대 완료 등 정상 종료
+(종료를 제외한 모든 상태) ──▶ EXPIRED  // 타임아웃 · 리셋
 ```
 
 | 상태 | 의미 | 직원 목록 노출 |
@@ -51,7 +52,12 @@ IDLE ──▶ CONSENTED ──▶ ANALYZING ──▶ MOOD_ACTIVE
 | `ASSIST_REQUESTED` | 고객이 직원 도움을 요청 | **표시** (`needsAssist: true`) |
 | `ASSIST_ACCEPTED` | 특정 직원이 응대 시작 | **표시** (`needsAssist: false`) |
 | `SELF_BROWSING` | 고객이 혼자 보기를 선택 | **표시** (`needsAssist: false`) |
+| `ENDED` | **정상 종료** — 응대를 마침 | — (목록에서 사라짐) |
 | `EXPIRED` | 무입력 타임아웃 또는 리셋 | — (목록에서 사라짐) |
+
+> **`ENDED` 와 `EXPIRED` 를 나눈 것은 지표 때문이다.** 핵심 지표가 완주 세션 수인데
+> 종료 경로가 하나뿐이면 "경험을 마친 고객"과 "그냥 떠난 고객"이 같은 값으로 집계된다.
+> `ENDED` 는 직원이 `complete` 를 눌러야 도달한다.
 
 **3·2·1 카운트다운은 서버 상태가 아니다.** 서버는 카운트다운을 관측할 수단이 없고
 이미지가 도착해야 비로소 알 수 있으므로 클라이언트 UI 단계로 남긴다.
@@ -181,8 +187,8 @@ multipart 대신 JSON 을 쓰는 이유는 프라이버시다. multipart 는 임
 
 - **추천 제품은 이 응답에 없다.** 추천은 호출마다 LLM 랭킹이 도는 비싼 연산이라 폴링
   경로에 얹을 수 없다. 카드를 열 때 받는다.
-- `waitingSeconds` 가 60 을 넘으면 재알림 대상이다. **재알림은 아직 서버가 하지 않으므로
-  현재는 직원 화면이 이 값으로 판단해야 한다.**
+- `waitingSeconds` 가 60 을 넘으면 서버가 SSE 로 재알림한다. 같은 세션에 대해 60초에
+  한 번씩만 울린다.
 
 ### `GET /api/staff/sessions/{sessionId}`
 
@@ -246,6 +252,54 @@ multipart 대신 JSON 을 쓰는 이유는 프라이버시다. multipart 는 임
 점유를 놓는다. 세션은 다시 대기 목록으로 돌아가 다른 직원이 받을 수 있다.
 **점유자 본인만 해제할 수 있다.**
 
+### `POST /api/staff/sessions/{sessionId}/complete`
+
+```json
+{ "staffId": "staff-01" }
+```
+
+세션을 `ENDED` 로 닫는다. 타임아웃으로 끝난 `EXPIRED` 와 구분되며, **이 구분이
+완주 세션 지표를 만든다.**
+
+`staffId` 는 선택이다. 넣으면 점유자 본인인지 확인하고, 비우면 확인 없이 닫는다 —
+고객이 혼자 보다 그냥 간 세션을 직원이 정리하는 경우가 있어 필수로 두지 않았다.
+
+### `GET /api/staff/notifications` — SSE
+
+직원 단말이 상태 변화를 실시간으로 받는 스트림. `Content-Type: text/event-stream`.
+
+**WebSocket 이 아니라 SSE 인 이유**: 이 채널은 서버 → 직원 단방향이다. 직원의 동작은
+이미 REST 로 올라가므로 양방향이 필요 없다. SSE 는 일반 HTTP 라 매장 방화벽·프록시를
+그대로 통과하고, 끊기면 브라우저가 알아서 재연결한다.
+
+| `event` | 언제 | 직원 화면이 할 일 |
+|---|---|---|
+| `connected` | 구독 성공 | 현재 대기 건수(`waiting`) 표시 |
+| `assist_requested` | 새 도움 요청 | 목록에 추가 + 알림음 |
+| `assist_cancelled` | 고객이 철회 | 목록에서 제거 |
+| `assist_accepted` | 다른 직원이 점유 | **잠금 표시** |
+| `assist_released` | 직원이 응대를 놓음 | 다시 대기로 |
+| `self_browsing` | 고객이 혼자 보기 선택 | 응대 불필요 표시 |
+| `session_closed` | 세션 종료 | 목록에서 제거 |
+
+```
+event: assist_requested
+data: {"type":"ASSIST_REQUESTED","sessionId":"01KZX8...","mirrorId":"mirror-01",
+       "mirrorLabel":"2F 피팅룸 A","state":"ASSIST_REQUESTED",
+       "waitingSeconds":0,"reminder":false,"occurredAt":"2026-08-17T10:00:00Z"}
+```
+
+- **알림에는 제품 추천이 실리지 않는다.** 추천은 세션당 한 번 LLM 랭킹을 돌려야 하는
+  비싼 연산이라 알림마다 만들면 한도를 즉시 넘긴다. 상세는 카드를 열 때 가져간다.
+- `reminder: true` 는 **60초 넘게 미확인이라 다시 보낸 것**이다. 같은 세션에 대해
+  60초에 한 번씩만 울린다.
+- 고객의 앞단 진행(동의·분석)은 알림을 만들지 않는다. 대기 화면이 소음으로 차지 않도록.
+- 15초마다 `:ping` 주석이 온다. 프록시가 유휴 연결을 끊는 것을 막기 위한 것이며
+  이벤트 핸들러에는 잡히지 않는다.
+
+> **이 스트림이 막혀도 직원 화면은 동작한다.** `GET /api/staff/sessions` 폴링이
+> 폴백으로 그대로 남아 있다.
+
 ---
 
 ## 공통 — `/api/health`
@@ -295,10 +349,11 @@ multipart 대신 JSON 을 쓰는 이유는 프라이버시다. multipart 는 임
 
 | 항목 | 현재 | 필요한 것 |
 |---|---|---|
-| 실시간 알림 | 없음. 직원 화면 폴링만 | WebSocket 또는 SSE |
-| 60초 미확인 재알림 | 없음 | 서버 측 타이머 |
-| 만료 스케줄러 | **`GET /api/staff/sessions` 가 사실상 청소부** | `@Scheduled` 주기 실행 |
-| 직원 인증 | 없음 | 매장 직원 역할 검증 |
+| **직원 인증** | 없음. `staffId` 는 자기 신고값 | 매장 직원 역할 검증 |
+| 세션 영속화 | 인메모리. 재시작하면 사라짐 | Redis 또는 DB |
+| 이벤트 영속화 | 인메모리 로그 | `session_events` 테이블 |
+| 다중 인스턴스 | SSE 구독이 인스턴스별로 갈림 | 메시지 브로커 |
 
-만료 처리가 조회에 얹혀 있는 것은 임시방편이다. 직원 화면을 아무도 열지 않으면 떠난
-고객의 세션이 걷히지 않는다.
+인증이 없는 것이 가장 큰 구멍이다. 지금은 아무나 남의 `staffId` 로 점유를 가로챌 수
+있고, `/api/staff/**` 를 알기만 하면 고객 분석 결과와 추천을 그대로 읽을 수 있다.
+사내망·데모 전제라 미룬 것이며 매장 도입 전에는 반드시 붙어야 한다.
