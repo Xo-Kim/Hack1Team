@@ -1,0 +1,18 @@
+### 에디터 · 도구 로컬 설정 ###
+# 사람마다 다른 값이라 공유하면 서로 덮어쓴다.
+.claude/
+.vscode/
+.idea/
+*.iml
+
+### OS ###
+.DS_Store
+Thumbs.db
+desktop.ini
+
+### 로컬 시크릿 — 절대 커밋 금지 ###
+# 실제 키는 Back/application-local.yaml 에만 넣는다. (Back/.gitignore 참고)
+*.local.yaml
+*.local.yml
+.env
+.env.local
