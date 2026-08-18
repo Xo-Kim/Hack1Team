@@ -267,11 +267,44 @@ body {
   }
 }
 
+/*
+ * screen--center 는 sheet/bottom 과 달리 스크림 배경이 없다 — 거울이
+ * 그대로 비쳐야 하는 화면이라 일부러 그렇게 뒀다. 대신 옷이 밝은 날엔
+ * 흰 글자가 밝은 영상 위에서 묻혀 안 보일 수 있으니, 텍스트에만 얇은
+ * 그림자를 줘서 최소한의 대비를 보장한다. text-shadow 는 상속되므로
+ * 이 화면 안 모든 텍스트에 자동으로 적용된다.
+ */
 .screen--center {
   align-items: center;
   justify-content: center;
   text-align: center;
   gap: var(--space-lg);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+}
+
+/*
+ * 브랜드 정보는 위로, 실제로 누르는 조작은 아이패드 실사용 기준
+ * 엄지가 자연히 닿는 하단부로 내린다. 정중앙 정렬은 시선은 편해도
+ * 손이 화면 한복판까지 올라가야 해서 매 세션 반복되는 조작엔 안 맞는다.
+ * 조작이 없는 화면(카운트다운·분석 중)은 그대로 정중앙을 유지한다 —
+ * 눌러야 할 게 없으면 이 규칙이 적용될 이유가 없다.
+ */
+.screen--anchored {
+  justify-content: flex-start;
+  padding-top: 15vh;
+}
+
+.screen--anchored .screen__action {
+  margin-top: auto;
+  margin-bottom: 9vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.screen__action .btn {
+  padding: 22px 44px;
 }
 
 /*
@@ -456,6 +489,62 @@ body {
   line-height: 1;
 }
 
+/*
+ * 패턴 대신 타이포그래피의 확신 + 헤리티지 문구로 MCM 느낌을 낸다.
+ * 워드마크를 한 단계 더 키우고, 화면 하단엔 가이드 7장에 이미 정의만
+ * 돼 있던 푸터 스펙("MODERN CREATION MÜNCHEN · 1976")을 처음 실제로 쓴다.
+ */
+.brandmark--hero {
+  font-size: clamp(3.5rem, 8vw, 6.5rem);
+}
+
+/*
+ * 헤리티지 푸터 — 가이드 7장 스펙을 여러 화면에서 재사용한다.
+ * .screen 이 이미 position:absolute 라 별도로 relative 를 다시 선언하면
+ * 안 된다(선언 순서상 뒤에 오는 규칙이 이겨서 전체 레이아웃이 깨진다) —
+ * 그래서 이 규칙엔 position 을 건드리지 않는다.
+ *
+ * 배경을 단색 바로 깔면 앱 하단 내비게이션처럼 보인다. 대신 위로 갈수록
+ * 사라지는 스크림 + 황동 헤어라인 하나로 "판형 여백에 새긴 문구"처럼
+ * 보이게 한다. 황동은 선으로만 쓰라는 규칙(6장)을 그대로 지킨다.
+ */
+.screen__footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: var(--space-md) var(--space-md) var(--space-sm);
+  background: linear-gradient(transparent, rgba(17, 17, 17, 0.94) 65%);
+  border-top: var(--border-hair) solid rgba(169, 131, 75, 0.35);
+  display: flex;
+  justify-content: center;
+  z-index: 1;
+}
+
+.screen__footer span {
+  font-family: var(--font-mono);
+  font-size: var(--type-label);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/*
+ * 진열장 프레임 — 가장자리 안쪽에 얇은 헤어라인 하나. 인쇄 광고의 마진
+ * 룰과 같은 장치로, "화면"이 아니라 "짜인 판형"이라는 인상을 준다.
+ * screen--bottom(무드 연출 화면)엔 적용하지 않는다 — 동적 조명색과
+ * 정적 장식이 한 화면에서 경쟁하면 안 된다는 5장 규칙을 따른다.
+ */
+.screen--center::after,
+.screen--sheet::after {
+  content: '';
+  position: absolute;
+  inset: var(--space-sm);
+  border: var(--border-hair) solid rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+  z-index: 0;
+}
+
 /* 카드 — 1px 헤어라인. 깊이는 그림자가 아니라 여백과 선으로 만든다. */
 .note {
   padding: var(--space-md);
@@ -502,8 +591,17 @@ body {
   transition: background var(--dur-fast) var(--ease-mcm);
 }
 
+/*
+ * 체크만 흰색 채움으로는 "동의함"인지 "그냥 빈 박스"인지 헷갈린다.
+ * 체크 표시를 SVG 로 그려 넣는다 — 아이콘 폰트나 이모지 대신 얇은
+ * 스트로크 하나로, 오닉스 색이라 흰 배경 위에서 대비가 확실하다.
+ */
 .check input:checked {
-  background: var(--mcm-white);
+  background-color: var(--mcm-white);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.4l3.1 3 5.9-6.6' fill='none' stroke='%23111111' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 11px 11px;
 }
 
 .countdown__num {
@@ -617,6 +715,21 @@ body {
   font-size: var(--type-body);
 }
 
+/* 음향처럼 값 아래에 재생 제어·출처 표시가 딸려 오는 항목. */
+.fact--rich {
+  gap: 6px;
+  min-width: 220px;
+}
+
+.fact__action {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.fact--rich .credit {
+  margin-top: 2px;
+}
+
 /* CC 라이선스의 저작자 표시는 준수 요건이다. 장식이 아니므로 지우지 말 것. */
 .credit {
   margin: 0;
@@ -642,9 +755,14 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-md);
-  width: min(820px, 100%);
+  width: min(560px, 100%);
 }
 
+/*
+ * 배경을 완전 투명으로 두면 카메라 화면이 밝을 때 흰 보더·흰 글자가
+ * 묻혀 버튼이 안 보인다(실사용 중 확인된 문제). 가이드가 이미 규정한
+ * 스크림 값(rgba(17,17,17,0.55))을 깔아 항상 읽히게 한다.
+ */
 .choice {
   display: flex;
   flex-direction: column;
@@ -652,11 +770,11 @@ body {
   padding: var(--space-lg) var(--space-md);
   border: var(--border-action) solid var(--mcm-white);
   border-radius: var(--radius-none);
-  background: transparent;
+  background: rgba(17, 17, 17, 0.55);
   color: var(--mcm-white);
   font-family: var(--font-body);
   cursor: pointer;
-  transition: border-color var(--dur-base) var(--ease-mcm);
+  transition: border-color var(--dur-base) var(--ease-mcm), background var(--dur-base) var(--ease-mcm);
 }
 
 .choice:hover {
@@ -731,16 +849,34 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-md);
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--space-md);
   border-bottom: var(--border-hair) solid var(--mcm-line);
   flex-wrap: wrap;
 }
 
 .staff__header h1 {
   margin: 0;
-  font-size: var(--type-body);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--type-h2);
   font-weight: 500;
   letter-spacing: -0.01em;
+}
+
+/*
+ * 직원 패널엔 장식·모노그램·조명을 쓰지 않는다(9장) — 그래서 스터드 대신
+ * 세리프 서체 하나로만 고객 화면 워드마크와 같은 브랜드라는 걸 알린다.
+ */
+.staff__brand {
+  font-family: var(--font-display);
+  font-weight: 500;
+}
+
+.staff__brand-sep {
+  width: var(--border-hair);
+  height: 0.85em;
+  background: var(--mcm-line);
 }
 
 .staff__name {

@@ -32,7 +32,11 @@ export function StaffHeader({
   return (
     <header className="staff__header">
       <div>
-        <h1>MCM 무드 미러 — 직원</h1>
+        <h1>
+          <span className="staff__brand">MCM</span>
+          <span className="staff__brand-sep" aria-hidden="true" />
+          무드 미러 — 직원
+        </h1>
         <p className="muted">
           {waiting > 0 ? (
             <>

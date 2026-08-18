@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { AudioMode } from '../audio/moodAudio'
 import type { CameraState } from '../hooks/useCamera'
 import type { MoodAnalysis, MusicTrack } from '../types'
@@ -14,15 +14,20 @@ import type { MoodAnalysis, MusicTrack } from '../types'
 
 export function IdleScreen({ onStart }: { onStart: () => void }) {
   return (
-    <div className="screen screen--center">
-      <div className="brandmark">MCM</div>
+    <div className="screen screen--center screen--anchored">
+      <div className="brandmark brandmark--hero">MCM</div>
       <div className="stack stack--tight">
         <h1 className="title">무드 미러</h1>
         <p className="lead">착장을 읽고 조명과 음악을 맞춥니다</p>
       </div>
-      <button className="btn btn--primary" onClick={onStart}>
-        시작
-      </button>
+      <div className="screen__action">
+        <button className="btn btn--primary" onClick={onStart}>
+          시작
+        </button>
+      </div>
+      <div className="screen__footer">
+        <span>Modern Creation München · 1976</span>
+      </div>
     </div>
   )
 }
@@ -93,6 +98,10 @@ export function ConsentScreen({
           동의하고 진행
         </button>
       </div>
+
+      <div className="screen__footer">
+        <span>Modern Creation München · 1976</span>
+      </div>
     </div>
   )
 }
@@ -143,6 +152,10 @@ export function PermissionScreen({
           {ready ? '촬영 시작' : '권한 대기 중'}
         </button>
       </div>
+
+      <div className="screen__footer">
+        <span>Modern Creation München · 1976</span>
+      </div>
     </div>
   )
 }
@@ -156,6 +169,10 @@ export function CountdownScreen({ value }: { value: number }) {
         {value}
       </div>
       <p className="muted">잠시 후 촬영합니다 — 편하게 서 계세요</p>
+
+      <div className="screen__footer">
+        <span>Modern Creation München · 1976</span>
+      </div>
     </div>
   )
 }
@@ -179,6 +196,10 @@ export function AnalyzingScreen({ step }: { step: number }) {
 
       <div className="progress">
         <span className="progress__bar" />
+      </div>
+
+      <div className="screen__footer">
+        <span>Modern Creation München · 1976</span>
       </div>
     </div>
   )
@@ -213,26 +234,31 @@ export function MoodScreen({
         {analysis.styleComment && <p className="lead">{analysis.styleComment}</p>}
       </div>
 
+      {/*
+       * 컨셉명은 위 h1 에 이미 크게 떠 있어 여기서 또 보여주면 같은 정보가
+       * 두 번 반복된다. 대신 "조명"과 "음향"만 나란히 두고, 음향 항목
+       * 안에 재생 제어(재생하기 버튼·출처 표시)를 바로 붙여서 한 덩어리로
+       * 읽히게 했다 — 예전엔 이 둘이 facts 밖에 따로 떠 있어 어떤 상태와
+       * 묶인 조작인지 애매했다.
+       */}
       <div className="facts">
-        <Fact label="컨셉" value={analysis.conceptName} />
         <Fact label="조명" value={analysis.lighting.sceneName} />
-        <Fact label="음향" value={audioLabel(audioMode, track, analysis)} />
+        <Fact label="음향" value={audioLabel(audioMode, track, analysis)}>
+          {(audioMode === 'blocked' || audioMode === 'none') && (
+            <button className="btn btn--sm fact__action" onClick={onRetryAudio}>
+              음악 재생하기
+            </button>
+          )}
+          {track && (
+            <p className="credit">
+              {track.title} — {track.artist}{' '}
+              <a href={track.shareUrl} target="_blank" rel="noreferrer">
+                {track.license}
+              </a>
+            </p>
+          )}
+        </Fact>
       </div>
-
-      {(audioMode === 'blocked' || audioMode === 'none') && (
-        <button className="btn btn--sm" onClick={onRetryAudio}>
-          음악 재생하기
-        </button>
-      )}
-
-      {track && (
-        <p className="credit">
-          {track.title} — {track.artist}{' '}
-          <a href={track.shareUrl} target="_blank" rel="noreferrer">
-            {track.license}
-          </a>
-        </p>
-      )}
 
       <div className="row">
         <button className="btn btn--primary" onClick={onNext}>
@@ -249,11 +275,20 @@ export function MoodScreen({
   )
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+function Fact({
+  label,
+  value,
+  children,
+}: {
+  label: string
+  value: string
+  children?: ReactNode
+}) {
   return (
-    <div className="fact">
+    <div className={`fact${children ? ' fact--rich' : ''}`}>
       <span className="label">{label}</span>
       <span className="fact__value">{value}</span>
+      {children}
     </div>
   )
 }
@@ -300,6 +335,10 @@ export function ChoiceScreen({
           <span className="choice__title">혼자 볼게요</span>
           <span className="choice__desc">연출은 그대로 유지됩니다</span>
         </button>
+      </div>
+
+      <div className="screen__footer">
+        <span>Modern Creation München · 1976</span>
       </div>
     </div>
   )
@@ -372,12 +411,18 @@ export function WaitingForStaffScreen({
 
 export function ErrorScreen({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div className="screen screen--center">
+    <div className="screen screen--center screen--anchored">
       <h2 className="title">잠시 문제가 있었습니다</h2>
       <p className="alert">{message}</p>
-      <button className="btn btn--primary" onClick={onRetry}>
-        처음부터 다시
-      </button>
+      <div className="screen__action">
+        <button className="btn btn--primary" onClick={onRetry}>
+          처음부터 다시
+        </button>
+      </div>
+
+      <div className="screen__footer">
+        <span>Modern Creation München · 1976</span>
+      </div>
     </div>
   )
 }
