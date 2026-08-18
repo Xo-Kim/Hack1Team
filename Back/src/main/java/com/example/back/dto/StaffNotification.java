@@ -34,6 +34,8 @@ public record StaffNotification(
         ASSIST_ACCEPTED,
         /** 직원이 응대를 놓았다. 다시 대기열로. */
         ASSIST_RELEASED,
+        /** 직원이 응대를 마쳤다. 목록에서 내리되 세션은 계속 살아 있다. */
+        ASSIST_FINISHED,
         /** 고객이 혼자 보기를 선택했다. 접근하지 말 것. */
         SELF_BROWSING,
         /** 세션이 끝났다. 알림을 내려야 한다. */

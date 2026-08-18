@@ -39,7 +39,7 @@ IDLE ──▶ CONSENTED ──▶ ANALYZING ──▶ MOOD_ACTIVE
                                           │
                                           └─▶ SELF_BROWSING ──▶ ASSIST_REQUESTED
 
-(연출 이후 모든 상태) ──▶ ENDED       // 응대 완료 등 정상 종료
+(연출 이후 모든 상태) ──▶ ENDED       // 고객이 직접 마침
 (종료를 제외한 모든 상태) ──▶ EXPIRED  // 타임아웃 · 리셋
 ```
 
@@ -52,12 +52,14 @@ IDLE ──▶ CONSENTED ──▶ ANALYZING ──▶ MOOD_ACTIVE
 | `ASSIST_REQUESTED` | 고객이 직원 도움을 요청 | **표시** (`needsAssist: true`) |
 | `ASSIST_ACCEPTED` | 특정 직원이 응대 시작 | **표시** (`needsAssist: false`) |
 | `SELF_BROWSING` | 고객이 혼자 보기를 선택 | **표시** (`needsAssist: false`) |
-| `ENDED` | **정상 종료** — 응대를 마침 | — (목록에서 사라짐) |
+| `ENDED` | **정상 종료** — 고객이 직접 마침 | — (목록에서 사라짐) |
 | `EXPIRED` | 무입력 타임아웃 또는 리셋 | — (목록에서 사라짐) |
 
 > **`ENDED` 와 `EXPIRED` 를 나눈 것은 지표 때문이다.** 핵심 지표가 완주 세션 수인데
 > 종료 경로가 하나뿐이면 "경험을 마친 고객"과 "그냥 떠난 고객"이 같은 값으로 집계된다.
-> `ENDED` 는 직원이 `complete` 를 눌러야 도달한다.
+> **세션을 끝낼 수 있는 것은 고객뿐이다.** 직원의 `complete` 는 응대만 닫고
+> 세션은 `MOOD_ACTIVE` 로 되돌린다 — 고객이 아직 거울 앞에 있는데 화면이 꺼지면
+> 그 자체로 쫓아내는 신호가 된다.
 
 **3·2·1 카운트다운은 서버 상태가 아니다.** 서버는 카운트다운을 관측할 수단이 없고
 이미지가 도착해야 비로소 알 수 있으므로 클라이언트 UI 단계로 남긴다.
@@ -151,6 +153,11 @@ multipart 대신 JSON 을 쓰는 이유는 프라이버시다. multipart 는 임
 
 도움 요청 철회. 이미 직원이 응대를 시작한 뒤라면 409 이며, 그때는 직원 쪽의
 `release` 로 풀어야 한다.
+
+### `POST /api/mirror/sessions/{sessionId}/end`
+
+고객이 경험을 마친다. 세션을 `ENDED` 로 닫으며 **완주로 기록된다.**
+무입력 타임아웃·중단으로 끝난 `EXPIRED` 와 구분되고, 이 구분이 완주 세션 지표를 만든다.
 
 ### `POST /api/mirror/sessions/{sessionId}/reset`
 
@@ -258,11 +265,16 @@ multipart 대신 JSON 을 쓰는 이유는 프라이버시다. multipart 는 임
 { "staffId": "staff-01" }
 ```
 
-세션을 `ENDED` 로 닫는다. 타임아웃으로 끝난 `EXPIRED` 와 구분되며, **이 구분이
-완주 세션 지표를 만든다.**
+**세션을 끝내지 않는다.** 응대만 닫고 상태를 `MOOD_ACTIVE` 로 되돌린다.
+담당 직원이 해제되고 직원 대기 목록에서는 빠지지만, 고객의 연출은 그대로 유지된다.
 
-`staffId` 는 선택이다. 넣으면 점유자 본인인지 확인하고, 비우면 확인 없이 닫는다 —
-고객이 혼자 보다 그냥 간 세션을 직원이 정리하는 경우가 있어 필수로 두지 않았다.
+직원의 일이 끝난 것이지 고객의 경험이 끝난 것이 아니다. 세션을 끝내는 것은
+고객의 `POST /api/mirror/sessions/{id}/end` 와 무입력 타임아웃뿐이다.
+
+`staffId` 는 선택이며, 넣으면 점유자 본인인지 확인한다. 다른 직원이 점유 중이면 409.
+
+추천 캐시는 지우지 않는다 — 고객이 다시 도움을 부르면 같은 착장의 추천이 필요한데,
+지우면 LLM 랭킹이 한 번 더 돌아 분당 한도를 쓴다.
 
 ### `GET /api/staff/notifications` — SSE
 
@@ -279,6 +291,7 @@ multipart 대신 JSON 을 쓰는 이유는 프라이버시다. multipart 는 임
 | `assist_cancelled` | 고객이 철회 | 목록에서 제거 |
 | `assist_accepted` | 다른 직원이 점유 | **잠금 표시** |
 | `assist_released` | 직원이 응대를 놓음 | 다시 대기로 |
+| `assist_finished` | 직원이 응대를 마침 | 목록에서 제거 (세션은 살아 있음) |
 | `self_browsing` | 고객이 혼자 보기 선택 | 응대 불필요 표시 |
 | `session_closed` | 세션 종료 | 목록에서 제거 |
 

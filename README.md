@@ -160,8 +160,15 @@ POST   /sessions/{id}/assist-request  ══push══▶│ event: assist_reque
 GET    /sessions/{id}  ◀──────────────  POST /sessions/{id}/accept
   musicDucked: true                       다른 직원이 점유 중이면 409
   볼륨만 낮추고 조명은 유지               POST /sessions/{id}/release
-                                          POST /sessions/{id}/complete → ENDED
+  ↓                                       POST /sessions/{id}/complete
+POST   /sessions/{id}/end → ENDED           응대만 닫고 세션은 유지
+  고객이 직접 마쳐야 끝난다
 ```
+
+**세션을 끝낼 수 있는 것은 고객뿐이다.** 직원이 '응대 완료'를 눌러도 세션은
+`MOOD_ACTIVE` 로 돌아갈 뿐 화면이 꺼지지 않는다 — 고객이 아직 거울 앞에 있는데
+화면이 초기화되면 그 자체로 쫓아내는 신호가 된다. 완주(`ENDED`)와
+이탈(`EXPIRED`)을 가르는 것도 이 지점이다.
 
 **알림은 SSE 푸시다.** 서버 → 직원 단방향이라 WebSocket 을 쓰지 않았다. 일반 HTTP 라
 매장 방화벽을 그대로 통과하고 끊기면 브라우저가 알아서 재연결한다. 실측 전달 0.4초.

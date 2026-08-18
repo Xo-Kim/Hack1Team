@@ -101,6 +101,13 @@ export const mirror = {
     request<SessionStateResponse>(`/mirror/sessions/${id}/self-browse`, { method: 'POST' }),
 
   /**
+   * 고객이 경험을 마친다. 완주(ENDED)로 기록된다.
+   * 직원의 '응대 완료'는 세션을 끝내지 않는다 — 끝내는 건 고객뿐이다.
+   */
+  end: (id: string) =>
+    request<SessionStateResponse>(`/mirror/sessions/${id}/end`, { method: 'POST' }),
+
+  /**
    * 대기 화면으로 되돌린다.
    * 무입력 타임아웃에서도 반드시 불러야 한다 — 화면만 초기화하면 서버 세션이 남아
    * 직원 대기 목록에 계속 떠 있다.

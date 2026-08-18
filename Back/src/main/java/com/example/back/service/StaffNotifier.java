@@ -104,10 +104,13 @@ public class StaffNotifier {
             case ASSIST_ACCEPTED -> StaffNotification.Type.ASSIST_ACCEPTED;
             case SELF_BROWSING -> StaffNotification.Type.SELF_BROWSING;
             case ENDED, EXPIRED -> StaffNotification.Type.SESSION_CLOSED;
-            // 고객이 요청을 철회해 연출로 돌아간 경우만 알린다.
-            case MOOD_ACTIVE -> event.from() == SessionState.ASSIST_REQUESTED
-                    ? StaffNotification.Type.ASSIST_CANCELLED
-                    : null;
+            // 연출로 돌아오는 경로가 둘이라 사유로 갈라야 한다.
+            // 고객이 철회한 것과 직원이 응대를 마친 것은 화면 문구가 달라야 한다.
+            case MOOD_ACTIVE -> switch (event.from()) {
+                case ASSIST_REQUESTED -> StaffNotification.Type.ASSIST_CANCELLED;
+                case ASSIST_ACCEPTED -> StaffNotification.Type.ASSIST_FINISHED;
+                default -> null;
+            };
             default -> null;
         };
         if (type == null) {

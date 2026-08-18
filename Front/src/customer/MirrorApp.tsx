@@ -113,6 +113,22 @@ export function MirrorApp() {
     }
   }, [sessionId, resetLocal])
 
+  /**
+   * 고객이 스스로 마친다. 완주로 기록된다.
+   * <p>
+   * resetAll(=EXPIRED) 과 갈라 둔다. 직원이 응대를 마쳐도 여기까지 오지 않는다 —
+   * 화면을 끄는 것은 고객의 몫이다.
+   */
+  const endSession = useCallback(() => {
+    const id = sessionId
+    resetLocal()
+    if (id) {
+      mirror.end(id).catch(() => {
+        /* 이미 만료됐을 수 있다. 화면은 대기로 돌아갔으므로 무시한다. */
+      })
+    }
+  }, [sessionId, resetLocal])
+
   useIdleTimeout(phase !== 'idle', IDLE_TIMEOUT_MS, resetAll)
 
   // -------------------------------------------------------------- 세션 시작
@@ -279,6 +295,7 @@ export function MirrorApp() {
         resetLocal()
         return
       }
+      // 직원이 응대를 마치면 MOOD_ACTIVE 로 돌아온다. 화면을 끄지 않고 연출을 잇는다.
       if (state === 'MOOD_ACTIVE') setPhase((p) => (p === 'assist' ? 'mood' : p))
       if (state === 'ASSIST_REQUESTED' || state === 'ASSIST_ACCEPTED') setPhase('assist')
       if (state === 'SELF_BROWSING') setPhase('selfBrowsing')
@@ -312,13 +329,19 @@ export function MirrorApp() {
     })
   }, [])
 
+  /**
+   * 자동재생이 막혔을 때의 재생 버튼.
+   * <p>
+   * 클릭 핸들러 안에서 불려야 브라우저가 허용한다. 마지막 play() 인자를 엔진이
+   * 들고 있으므로 같은 곡·같은 페이드로 다시 건다 — 신스로 대체하지 않는다.
+   */
   const retryAudio = useCallback(async () => {
     const engine = audio.current
-    if (!engine || !analysis) return
-    await engine.play(analysis.music, track, analysis.lighting.transitionMs)
+    if (!engine) return
+    await engine.resumeFromGesture()
     setAudioMode(engine.mode)
     engine.setMuted(muted)
-  }, [analysis, track, muted])
+  }, [muted])
 
   // ------------------------------------------------------------------ 렌더
 
@@ -377,7 +400,7 @@ export function MirrorApp() {
             onToggleMute={toggleMute}
             onRetryAudio={retryAudio}
             onNext={() => setPhase('choice')}
-            onReset={resetAll}
+            onEnd={endSession}
           />
         )}
 
@@ -394,7 +417,7 @@ export function MirrorApp() {
             onToggleMute={toggleMute}
             onCancelAssist={cancelAssist}
             onCallStaff={chooseAssist}
-            onReset={resetAll}
+            onEnd={endSession}
           />
         )}
 

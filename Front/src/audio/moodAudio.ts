@@ -1,7 +1,17 @@
 import type { MusicSpec, MusicTrack } from '../types'
 import { MoodSynth } from './moodSynth'
 
-export type AudioMode = 'track' | 'synth' | 'none'
+/**
+ * 재생 상태.
+ * - track   실제 음원 재생 중
+ * - synth   절차적 앰비언스
+ * - blocked 음원은 준비됐으나 자동재생이 막힘 — 탭 한 번이면 재생된다
+ * - none    아무것도 못 냄
+ */
+export type AudioMode = 'track' | 'synth' | 'blocked' | 'none'
+
+/** playTrack 결과. 자동재생 거부와 진짜 실패는 다르게 다뤄야 한다. */
+type TrackResult = 'ok' | 'blocked' | 'failed'
 
 /**
  * 음향 재생 단일 창구.
@@ -51,13 +61,27 @@ export class MoodAudio {
   async play(spec: MusicSpec, track: MusicTrack | null, fadeMs: number): Promise<void> {
     this.stop(0)
 
+    this.pending = { spec, track, fadeMs }
+
     if (track?.audioUrl) {
-      const ok = await this.playTrack(track, fadeMs)
-      if (ok) {
+      const result = await this.playTrack(track, fadeMs)
+      if (result === 'ok') {
         this._mode = 'track'
         return
       }
-      // 음원 재생이 막히면 조용히 앰비언스로 넘어간다. 데모가 무음이 되는 것보다 낫다.
+      /*
+       * 자동재생 거부는 실패가 아니다.
+       *
+       * 여기서 신스로 넘어가면 실제 음원이 멀쩡한데도 킥·스네어만 나오는 상태가
+       * 되고, 브라우저 정책은 상황에 따라 허용되기도 해서 "어떤 때는 음악이,
+       * 어떤 때는 비트만" 나오는 것처럼 보인다. 음원을 버리지 말고 재생 버튼을
+       * 띄워 탭 한 번으로 살린다.
+       */
+      if (result === 'blocked') {
+        console.warn('[audio] 자동재생 차단 — 사용자 조작 대기')
+        this._mode = 'blocked'
+        return
+      }
       console.warn('[audio] 음원 재생 실패 — 절차적 앰비언스로 폴백')
     }
 
@@ -74,7 +98,17 @@ export class MoodAudio {
     }
   }
 
-  private async playTrack(track: MusicTrack, fadeMs: number): Promise<boolean> {
+  /** play() 인자를 보관한다. 자동재생이 풀렸을 때 같은 조건으로 다시 걸기 위해서다. */
+  private pending: { spec: MusicSpec; track: MusicTrack | null; fadeMs: number } | null = null
+
+  /** 자동재생이 막혔을 때 UI 의 재생 버튼이 부른다. 반드시 클릭 핸들러 안에서. */
+  async resumeFromGesture(): Promise<void> {
+    const p = this.pending
+    if (!p) return
+    await this.play(p.spec, p.track, p.fadeMs)
+  }
+
+  private async playTrack(track: MusicTrack, fadeMs: number): Promise<TrackResult> {
     const el = new Audio()
 
     /*
@@ -102,15 +136,19 @@ export class MoodAudio {
     try {
       await el.play()
     } catch (e) {
-      // 자동재생 차단이거나 네트워크·코덱 실패. 어느 쪽이든 앰비언스로 넘긴다.
-      console.warn('[audio] 음원 재생 거부:', e)
+      // NotAllowedError = 자동재생 정책. 그 외는 네트워크·코덱 문제다.
+      if (e instanceof DOMException && e.name === 'NotAllowedError') {
+        // 엘리먼트를 살려 둔다. 사용자가 탭하면 play() 만 다시 부르면 된다.
+        return 'blocked'
+      }
+      console.warn('[audio] 음원 재생 실패:', e)
       el.removeAttribute('src')
       this.el = null
-      return false
+      return 'failed'
     }
 
     this.fadeTo(this.effectiveVolume(), fadeMs)
-    return true
+    return 'ok'
   }
 
   /** HTMLAudioElement 는 볼륨 램프가 없어서 직접 보간한다. */

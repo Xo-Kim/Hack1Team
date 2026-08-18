@@ -13,7 +13,7 @@ import java.util.Set;
  *                                   ├→ ASSIST_REQUESTED ⇄ ASSIST_ACCEPTED
  *                                   └→ SELF_BROWSING
  *
- * (연출 이후 모든 상태) → ENDED     // 응대 완료 등 정상 종료
+ * (연출 이후 모든 상태) → ENDED     // 고객이 직접 마침
  * (모든 비종료 상태)   → EXPIRED   // 타임아웃 · 리셋
  * </pre>
  *
@@ -22,6 +22,9 @@ import java.util.Set;
  * <p>
  * <b>ENDED 와 EXPIRED 를 나누는 이유는 지표다.</b> 핵심 지표가 완주 세션 수인데
  * 종료 경로가 하나뿐이면 "경험을 마친 고객"과 "그냥 떠난 고객"이 구분되지 않는다.
+ * <p>
+ * <b>세션을 끝내는 것은 고객뿐이다.</b> 직원이 응대를 마쳐도 세션은 살아 있다.
+ * 고객이 아직 거울 앞에 서 있는데 화면이 꺼지면 그 자체로 쫓아내는 신호가 된다.
  */
 public enum SessionState {
 
@@ -73,8 +76,9 @@ public enum SessionState {
             case MOOD_ACTIVE -> EnumSet.of(ASSIST_REQUESTED, SELF_BROWSING, ENDED);
             // 고객이 요청을 철회하면 MOOD_ACTIVE 로 되돌아간다.
             case ASSIST_REQUESTED -> EnumSet.of(ASSIST_ACCEPTED, MOOD_ACTIVE, ENDED);
-            // 직원이 응대를 놓으면(release) 다시 대기열로 돌아간다.
-            case ASSIST_ACCEPTED -> EnumSet.of(ASSIST_REQUESTED, ENDED);
+            // 직원이 응대를 놓으면(release) 대기열로, 마치면(finish) 연출로 돌아간다.
+            // 응대 종료가 세션 종료는 아니다 — 고객은 계속 서 있을 수 있다.
+            case ASSIST_ACCEPTED -> EnumSet.of(ASSIST_REQUESTED, MOOD_ACTIVE, ENDED);
             // 자율 관람 중에도 마음이 바뀌면 직원을 부를 수 있다.
             case SELF_BROWSING -> EnumSet.of(ASSIST_REQUESTED, ENDED);
             case ENDED, EXPIRED -> EnumSet.noneOf(SessionState.class);

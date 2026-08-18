@@ -194,7 +194,7 @@ export function MoodScreen({
   onToggleMute,
   onRetryAudio,
   onNext,
-  onReset,
+  onEnd,
 }: {
   analysis: MoodAnalysis
   track: MusicTrack | null
@@ -203,7 +203,7 @@ export function MoodScreen({
   onToggleMute: () => void
   onRetryAudio: () => void
   onNext: () => void
-  onReset: () => void
+  onEnd: () => void
 }) {
   return (
     <div className="screen screen--bottom">
@@ -219,8 +219,8 @@ export function MoodScreen({
         <Fact label="음향" value={audioLabel(audioMode, track, analysis)} />
       </div>
 
-      {audioMode === 'none' && (
-        <button className="btn" onClick={onRetryAudio}>
+      {(audioMode === 'blocked' || audioMode === 'none') && (
+        <button className="btn btn--sm" onClick={onRetryAudio}>
           음악 재생하기
         </button>
       )}
@@ -241,8 +241,8 @@ export function MoodScreen({
         <button className="btn btn--sm" onClick={onToggleMute}>
           {muted ? '음악 켜기' : '음악 끄기'}
         </button>
-        <button className="btn btn--sm" onClick={onReset}>
-          처음부터
+        <button className="btn btn--sm" onClick={onEnd}>
+          마치기
         </button>
       </div>
     </div>
@@ -266,6 +266,7 @@ function Fact({ label, value }: { label: string; value: string }) {
  */
 function audioLabel(mode: AudioMode, track: MusicTrack | null, analysis: MoodAnalysis): string {
   if (mode === 'track' && track) return track.title
+  if (mode === 'blocked') return '재생 대기'
   if (mode === 'synth') return `${analysis.music.key} ${analysis.music.scale} · ${analysis.music.bpm} BPM`
   return '재생 대기'
 }
@@ -314,7 +315,7 @@ export function WaitingForStaffScreen({
   onToggleMute,
   onCancelAssist,
   onCallStaff,
-  onReset,
+  onEnd,
 }: {
   mode: 'assist' | 'self'
   analysis: MoodAnalysis
@@ -323,7 +324,7 @@ export function WaitingForStaffScreen({
   onToggleMute: () => void
   onCancelAssist: () => void
   onCallStaff: () => void
-  onReset: () => void
+  onEnd: () => void
 }) {
   const serving = staffName !== null
 
@@ -359,8 +360,8 @@ export function WaitingForStaffScreen({
         <button className="btn" onClick={onToggleMute}>
           {muted ? '음악 켜기' : '음악 끄기'}
         </button>
-        <button className="btn" onClick={onReset}>
-          처음부터
+        <button className="btn" onClick={onEnd}>
+          마치기
         </button>
       </div>
     </div>

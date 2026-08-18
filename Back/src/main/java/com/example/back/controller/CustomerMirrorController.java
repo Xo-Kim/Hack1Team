@@ -103,6 +103,19 @@ public class CustomerMirrorController {
         return customer.consent(sessionId);
     }
 
+    @PostMapping("/sessions/{sessionId}/end")
+    @Operation(summary = "경험 마치기 (고객)", description = """
+            세션을 `ENDED` 로 닫는다. 무입력 타임아웃으로 끝난 `EXPIRED` 와 구분되며,
+            **이 구분이 완주 세션 지표를 만든다.**
+
+            **세션을 끝낼 수 있는 것은 고객뿐이다.** 직원의 `complete` 는 응대만 닫고
+            세션은 살려 둔다 — 고객이 아직 거울 앞에 있는데 화면이 꺼지면 그 자체로
+            쫓아내는 신호가 되기 때문이다.
+            """)
+    public SessionStateResponse end(@PathVariable String sessionId) {
+        return customer.end(sessionId);
+    }
+
     @PostMapping("/sessions/{sessionId}/reset")
     @Operation(summary = "세션 리셋", description = """
             미러를 대기 화면으로 되돌린다. 미응대 알림이 걸려 있으면 함께 취소된다.
