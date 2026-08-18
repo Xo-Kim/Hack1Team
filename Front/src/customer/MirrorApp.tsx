@@ -63,7 +63,8 @@ export function MirrorApp() {
 
   const [audioMode, setAudioMode] = useState<AudioMode>('none')
   const [muted, setMuted] = useState(false)
-  const [staffName, setStaffName] = useState<string | null>(null)
+  /** 직원이 응대를 잡았는지. 이름은 받지 않는다 — 고객에게 필요한 건 "곧 온다"뿐이다. */
+  const [serving, setServing] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [health_, setHealth] = useState<HealthResponse | null>(null)
 
@@ -76,8 +77,11 @@ export function MirrorApp() {
     health().then(setHealth).catch(() => setHealth(null))
   }, [])
 
+  // 모드는 엔진이 알려준다. play() 가 끝난 뒤 한 번 읽는 방식이면 로딩(3~4초)과
+  // 폴백 전환이 화면에 반영되지 않아, 음원이 오는 중인데도 재생 버튼이 떠 있었다.
   useEffect(() => {
     const engine = audio.current
+    engine?.observe(setAudioMode)
     return () => engine?.stop(0)
   }, [])
 
@@ -93,7 +97,7 @@ export function MirrorApp() {
     setTrack(null)
     setAudioMode('none')
     setMuted(false)
-    setStaffName(null)
+    setServing(false)
     setErrorMessage(null)
   }, [])
 
@@ -176,12 +180,11 @@ export function MirrorApp() {
       setTrack(res.track)
       setPhase('mood')
 
-      // 빛과 소리를 같은 시간에 걸쳐 올린다.
+      // 빛과 소리를 같은 시간에 걸쳐 올린다. 모드는 engine.observe 가 갱신한다.
       const engine = audio.current
       if (engine) {
         engine.setVolume(NORMAL_VOLUME, 0)
         await engine.play(res.analysis.music, res.track, res.analysis.lighting.transitionMs)
-        setAudioMode(engine.mode)
       }
     } catch (e) {
       window.clearInterval(stepTimer)
@@ -270,7 +273,7 @@ export function MirrorApp() {
     try {
       await mirror.cancelAssist(sessionId)
       setPhase('mood')
-      setStaffName(null)
+      setServing(false)
       audio.current?.setVolume(NORMAL_VOLUME, 700)
     } catch (e) {
       if (isSessionGone(e)) resetLocal()
@@ -287,8 +290,8 @@ export function MirrorApp() {
    * 연출 정책이지 클라이언트가 판단할 일이 아니다.
    */
   const applyServerState = useCallback(
-    (state: SessionState, ducked: boolean, name: string | null) => {
-      setStaffName(name)
+    (state: SessionState, ducked: boolean) => {
+      setServing(state === 'ASSIST_ACCEPTED')
       audio.current?.setVolume(ducked ? SERVING_VOLUME : NORMAL_VOLUME, 700)
 
       if (state === 'EXPIRED' || state === 'ENDED') {
@@ -310,7 +313,7 @@ export function MirrorApp() {
     const timer = window.setInterval(async () => {
       try {
         const s = await mirror.state(sessionId)
-        applyServerState(s.state, s.musicDucked, s.assistStaffName)
+        applyServerState(s.state, s.musicDucked)
       } catch (e) {
         if (isSessionGone(e)) resetLocal()
       }
@@ -339,7 +342,6 @@ export function MirrorApp() {
     const engine = audio.current
     if (!engine) return
     await engine.resumeFromGesture()
-    setAudioMode(engine.mode)
     engine.setMuted(muted)
   }, [muted])
 
@@ -347,7 +349,6 @@ export function MirrorApp() {
 
   const lit = phase === 'mood' || phase === 'choice' || phase === 'assist' || phase === 'selfBrowsing'
   const lighting = lit && analysis ? analysis.lighting : null
-  const serving = staffName !== null
 
   return (
     <div className="app" style={lightingToCssVars(lighting)}>
@@ -412,7 +413,7 @@ export function MirrorApp() {
           <WaitingForStaffScreen
             mode={phase === 'assist' ? 'assist' : 'self'}
             analysis={analysis}
-            staffName={staffName}
+            serving={serving}
             muted={muted}
             onToggleMute={toggleMute}
             onCancelAssist={cancelAssist}

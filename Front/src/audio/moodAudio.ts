@@ -3,12 +3,13 @@ import { MoodSynth } from './moodSynth'
 
 /**
  * 재생 상태.
+ * - loading 음원을 받는 중. 실측 3~4초 걸린다
  * - track   실제 음원 재생 중
  * - synth   절차적 앰비언스
  * - blocked 음원은 준비됐으나 자동재생이 막힘 — 탭 한 번이면 재생된다
  * - none    아무것도 못 냄
  */
-export type AudioMode = 'track' | 'synth' | 'blocked' | 'none'
+export type AudioMode = 'loading' | 'track' | 'synth' | 'blocked' | 'none'
 
 /** playTrack 결과. 자동재생 거부와 진짜 실패는 다르게 다뤄야 한다. */
 type TrackResult = 'ok' | 'blocked' | 'failed'
@@ -49,6 +50,24 @@ export class MoodAudio {
   private volume = 0.55
   private muted = false
 
+  /**
+   * 재생 세대.
+   * <p>
+   * play()/stop() 이 불릴 때마다 올라간다. 진행 중이던 재생 체인은 await 에서 깨어날 때
+   * 자기 세대가 아직 최신인지 확인하고, 아니면 아무것도 하지 않고 물러난다.
+   *
+   * <b>이 장치가 없으면 실제로 음악 대신 신스가 나온다.</b> 음원 로딩은 실측 3~4초라
+   * 그동안 화면에는 재생 버튼이 떠 있었다. 고객이 그걸 누르면 두 번째 play() 가
+   * 첫 번째 엘리먼트를 load() 로 폐기하는데, 그 순간 첫 번째의 el.play() 프로미스가
+   * AbortError 로 거부된다. 자동재생 차단이 아니므로 첫 체인은 이것을 '음원 실패'로
+   * 읽고 신스를 켰다. 그래서 음악은 나오지만 그 위에 킥·스네어가 겹치거나,
+   * 두 체인의 완료 순서에 따라 신스만 남았다.
+   */
+  private generation = 0
+
+  /** 모드 변화 구독. React 상태와 엔진 상태가 어긋나지 않도록 엔진이 먼저 알린다. */
+  private onModeChange: ((mode: AudioMode) => void) | null = null
+
   constructor() {
     liveInstances.add(this)
   }
@@ -57,16 +76,33 @@ export class MoodAudio {
     return this._mode
   }
 
+  observe(listener: (mode: AudioMode) => void): void {
+    this.onModeChange = listener
+  }
+
+  private setMode(mode: AudioMode): void {
+    if (this._mode === mode) return
+    this._mode = mode
+    this.onModeChange?.(mode)
+  }
+
   /** 반드시 사용자 제스처 안에서 호출해야 한다 (AudioContext / audio.play() 둘 다). */
   async play(spec: MusicSpec, track: MusicTrack | null, fadeMs: number): Promise<void> {
+    // stop() 이 세대를 올리므로 순서가 중요하다. 먼저 멈추고, 그 다음에 내 세대를 딴다.
     this.stop(0)
+    const gen = ++this.generation
 
     this.pending = { spec, track, fadeMs }
 
     if (track?.audioUrl) {
-      const result = await this.playTrack(track, fadeMs)
+      // 로딩 중임을 즉시 알린다. 이 구간에 재생 버튼이 뜨면 위의 경합이 일어난다.
+      this.setMode('loading')
+
+      const result = await this.playTrack(track, fadeMs, gen)
+      if (gen !== this.generation) return
+
       if (result === 'ok') {
-        this._mode = 'track'
+        this.setMode('track')
         return
       }
       /*
@@ -79,7 +115,7 @@ export class MoodAudio {
        */
       if (result === 'blocked') {
         console.warn('[audio] 자동재생 차단 — 사용자 조작 대기')
-        this._mode = 'blocked'
+        this.setMode('blocked')
         return
       }
       console.warn('[audio] 음원 재생 실패 — 절차적 앰비언스로 폴백')
@@ -90,11 +126,17 @@ export class MoodAudio {
     // mode 를 'none' 으로 남겨 UI 가 재시도를 제안하게 한다.
     try {
       await this.synth.play(spec, fadeMs)
+      if (gen !== this.generation) {
+        // 내가 자는 사이 다음 재생이 시작됐다. 켠 것은 내가 치운다.
+        this.synth.stop(0)
+        return
+      }
       this.synth.setVolume(this.effectiveVolume(), 200)
-      this._mode = 'synth'
+      this.setMode('synth')
     } catch (e) {
+      if (gen !== this.generation) return
       console.warn('[audio] 절차적 앰비언스도 실패 — 무음 상태', e)
-      this._mode = 'none'
+      this.setMode('none')
     }
   }
 
@@ -103,12 +145,14 @@ export class MoodAudio {
 
   /** 자동재생이 막혔을 때 UI 의 재생 버튼이 부른다. 반드시 클릭 핸들러 안에서. */
   async resumeFromGesture(): Promise<void> {
+    // 로딩 중이면 이미 같은 곡을 받고 있다. 여기서 다시 걸면 방금 고친 경합을 되살린다.
+    if (this._mode === 'loading') return
     const p = this.pending
     if (!p) return
     await this.play(p.spec, p.track, p.fadeMs)
   }
 
-  private async playTrack(track: MusicTrack, fadeMs: number): Promise<TrackResult> {
+  private async playTrack(track: MusicTrack, fadeMs: number, gen: number): Promise<TrackResult> {
     const el = new Audio()
 
     /*
@@ -136,6 +180,10 @@ export class MoodAudio {
     try {
       await el.play()
     } catch (e) {
+      // 내가 자는 사이 다음 재생이 시작됐다면 이 실패는 내가 폐기된 결과다.
+      // (load() 가 진행 중인 play() 를 AbortError 로 거부시킨다.)
+      if (gen !== this.generation) return 'failed'
+
       // NotAllowedError = 자동재생 정책. 그 외는 네트워크·코덱 문제다.
       if (e instanceof DOMException && e.name === 'NotAllowedError') {
         // 엘리먼트를 살려 둔다. 사용자가 탭하면 play() 만 다시 부르면 된다.
@@ -144,6 +192,14 @@ export class MoodAudio {
       console.warn('[audio] 음원 재생 실패:', e)
       el.removeAttribute('src')
       this.el = null
+      return 'failed'
+    }
+
+    if (gen !== this.generation) {
+      // 재생에는 성공했지만 이미 다음 곡이 시작됐다. 두 곡이 겹치지 않게 여기서 끈다.
+      el.pause()
+      el.removeAttribute('src')
+      el.load()
       return 'failed'
     }
 
@@ -225,6 +281,10 @@ export class MoodAudio {
   }
 
   stop(fadeMs = 900): void {
+    // 진행 중인 재생 체인을 무효화한다. 이게 없으면 정지 직후 도착한 체인이
+    // 다시 소리를 켠다.
+    this.generation += 1
+
     this.synth.stop(fadeMs)
 
     if (this.fadeTimer !== null) {
@@ -238,7 +298,7 @@ export class MoodAudio {
       this.fadeTimerFreeStop(el, fadeMs)
     }
 
-    this._mode = 'none'
+    this.setMode('none')
   }
 
   /** 페이드아웃 후 확실히 정지시킨다. src 를 비워야 백그라운드 버퍼링도 멈춘다. */

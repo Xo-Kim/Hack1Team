@@ -13,29 +13,33 @@ import { AssistCard, SessionList, StaffHeader, Toast } from './screens'
  * <b>직원 식별은 현재 로컬 저장 값이다.</b> 서버에 인증이 없어서 `staffId` 가
  * 자기 신고값이며, 그래서 중복 응대 방지도 신뢰 기반이다. 매장 도입 전에 로그인이
  * 붙어야 하고, 그때 이 부분은 통째로 교체된다.
+ * <p>
+ * 이름은 다루지 않는다. 단말을 서로 구분하는 데 필요한 것은 식별자뿐이고, 고객
+ * 화면 문구는 상태 기반으로 바뀌었다.
  */
 
 const STAFF_KEY = 'mcm.staff'
 
 interface Me {
   staffId: string
-  staffName: string
 }
 
 function loadMe(): Me {
   try {
     const raw = localStorage.getItem(STAFF_KEY)
-    if (raw) return JSON.parse(raw)
+    // 이름을 쓰던 시절의 저장값이 남아 있어도 staffId 만 꺼내 쓴다.
+    const saved = raw ? (JSON.parse(raw) as Partial<Me>) : null
+    if (saved?.staffId) return { staffId: saved.staffId }
   } catch {
     /* 저장값이 깨졌으면 새로 만든다 */
   }
-  const me = { staffId: `staff-${Math.random().toString(36).slice(2, 7)}`, staffName: '' }
+  const me = { staffId: `staff-${Math.random().toString(36).slice(2, 7)}` }
   localStorage.setItem(STAFF_KEY, JSON.stringify(me))
   return me
 }
 
 export function StaffApp() {
-  const [me, setMe] = useState<Me>(loadMe)
+  const [me] = useState<Me>(loadMe)
   const [sessions, setSessions] = useState<StaffSessionSummary[]>([])
   const [openId, setOpenId] = useState<string | null>(null)
   const [card, setCard] = useState<StaffCard | null>(null)
@@ -128,14 +132,7 @@ export function StaffApp() {
   )
 
   const accept = useCallback(
-    (id: string) => {
-      const name = me.staffName.trim()
-      if (!name) {
-        setError('먼저 이름을 입력해 주세요. 고객 화면에 표시됩니다.')
-        return
-      }
-      void runOnCard(() => staff.accept(id, me.staffId, name))
-    },
+    (id: string) => void runOnCard(() => staff.accept(id, me.staffId)),
     [me, runOnCard],
   )
 
@@ -152,23 +149,13 @@ export function StaffApp() {
     [me, runOnCard, closeCard],
   )
 
-  const saveMe = useCallback((next: Me) => {
-    setMe(next)
-    localStorage.setItem(STAFF_KEY, JSON.stringify(next))
-  }, [])
-
   // ---------------------------------------------------------------- 렌더
 
   const waiting = sessions.filter((s) => s.needsAssist).length
 
   return (
     <div className="staff">
-      <StaffHeader
-        me={me}
-        onChangeName={(staffName) => saveMe({ ...me, staffName })}
-        connection={connection}
-        waiting={waiting}
-      />
+      <StaffHeader me={me} connection={connection} waiting={waiting} />
 
       {error && <p className="staff__error">{error}</p>}
       {toast && <Toast notification={toast} onOpen={() => openCard(toast.sessionId)} />}

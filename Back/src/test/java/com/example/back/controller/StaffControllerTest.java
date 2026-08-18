@@ -33,8 +33,8 @@ class StaffControllerTest {
     private static final String IMAGE = "data:image/jpeg;base64," + Base64.getEncoder().encodeToString(
             new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xD9});
 
-    private static final String STAFF_1 = "{\"staffId\":\"staff-01\",\"staffName\":\"김직원\"}";
-    private static final String STAFF_2 = "{\"staffId\":\"staff-02\",\"staffName\":\"이직원\"}";
+    private static final String STAFF_1 = "{\"staffId\":\"staff-01\"}";
+    private static final String STAFF_2 = "{\"staffId\":\"staff-02\"}";
 
     @Autowired
     MockMvc mvc;
@@ -134,7 +134,9 @@ class StaffControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(STAFF_1))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state").value("ASSIST_ACCEPTED"))
-                .andExpect(jsonPath("$.assignedStaffName").value("김직원"));
+                .andExpect(jsonPath("$.assignedStaffId").value("staff-01"))
+                // 이름은 어디에도 실리지 않는다.
+                .andExpect(jsonPath("$.assignedStaffName").doesNotExist());
 
         mvc.perform(post("/api/staff/sessions/{id}/accept", id)
                         .contentType(MediaType.APPLICATION_JSON).content(STAFF_2))
@@ -174,7 +176,7 @@ class StaffControllerTest {
 
         mvc.perform(post("/api/staff/sessions/{id}/accept", id)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"staffName\":\"이름만\"}"))
+                        .content("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("bad_request"));
     }

@@ -18,7 +18,6 @@ import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -90,13 +89,11 @@ public class StaffService {
      */
     public StaffCard accept(String sessionId, AcceptAssistRequest request) {
         requireText(request == null ? null : request.staffId(), "staffId");
-        requireText(request.staffName(), "staffName");
 
         Session session = require(sessionId);
         checkOwner(session, request.staffId());
 
-        session.acceptAssist(new StaffAssignment(
-                request.staffId(), request.staffName(), clock.instant()));
+        session.acceptAssist(new StaffAssignment(request.staffId(), clock.instant()));
         sessions.save(session);
 
         log.info("assist accepted sessionId={} staffId={} mirrorId={}",
@@ -157,8 +154,7 @@ public class StaffService {
                 .ifPresent(current -> {
                     log.warn("중복 응대 차단 sessionId={} 점유={} 시도={}",
                             session.id(), current.staffId(), staffId);
-                    throw new AssistConflictException(
-                            Objects.requireNonNullElse(current.staffName(), current.staffId()));
+                    throw new AssistConflictException();
                 });
     }
 
@@ -172,8 +168,7 @@ public class StaffService {
                 waitingSeconds(session),
                 session.analysis().map(MoodAnalysis::conceptName).orElse(null),
                 session.state() == SessionState.ASSIST_REQUESTED,
-                session.assignedStaff().map(StaffAssignment::staffId).orElse(null),
-                session.assignedStaff().map(StaffAssignment::staffName).orElse(null));
+                session.assignedStaff().map(StaffAssignment::staffId).orElse(null));
     }
 
     private StaffCard toCard(Session session) {
@@ -199,8 +194,7 @@ public class StaffService {
                 session.isAnalysisFallback(),
                 rec != null && rec.fallback(),
                 rec == null ? "분석이 아직 끝나지 않아 추천을 만들지 못했습니다." : rec.note(),
-                session.assignedStaff().map(StaffAssignment::staffId).orElse(null),
-                session.assignedStaff().map(StaffAssignment::staffName).orElse(null));
+                session.assignedStaff().map(StaffAssignment::staffId).orElse(null));
     }
 
     /**

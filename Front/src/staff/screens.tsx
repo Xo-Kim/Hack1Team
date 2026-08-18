@@ -18,14 +18,19 @@ const STATE_LABEL: Record<string, string> = {
 
 // ------------------------------------------------------------------ 헤더
 
+/**
+ * 헤더.
+ * <p>
+ * <b>이름 입력란은 없다.</b> 유일한 용도가 고객 화면 문구였는데 그 문구가 상태 기반으로
+ * 바뀌면서 필요가 사라졌다. 남은 것은 단말 식별자뿐이고, 그건 내가 잡은 응대와 남이
+ * 잡은 응대를 가르는 데만 쓴다.
+ */
 export function StaffHeader({
   me,
-  onChangeName,
   connection,
   waiting,
 }: {
-  me: { staffId: string; staffName: string }
-  onChangeName: (name: string) => void
+  me: { staffId: string }
   connection: ConnectionState
   waiting: number
 }) {
@@ -44,14 +49,7 @@ export function StaffHeader({
         </p>
       </div>
 
-      <label className="staff__name">
-        <span className="label">Staff</span>
-        <input
-          value={me.staffName}
-          placeholder="고객 화면에 표시됩니다"
-          onChange={(e) => onChangeName(e.target.value)}
-        />
-      </label>
+      <span className="staff__id label">단말 {me.staffId}</span>
 
       {/* 알림이 끊긴 것을 조용히 숨기면 직원은 요청이 없는 것으로 오해한다. */}
       <span className={`conn conn--${connection} label`}>
@@ -136,9 +134,7 @@ export function SessionList({
                 )}
 
                 {/* 중복 응대 방지 — 누가 잡고 있는지 목록에서 바로 보여야 헛걸음이 없다 */}
-                {lockedByOther && (
-                  <span className="lock">{s.assignedStaffName} 응대 중</span>
-                )}
+                {lockedByOther && <span className="lock">다른 직원 응대 중</span>}
                 {mine && <span className="lock lock--mine">내 응대</span>}
               </button>
             </li>
@@ -198,7 +194,7 @@ export function AssistCard({
       {/* 응대 상태 */}
       <div className="card__actions">
         {lockedByOther ? (
-          <p className="alert">{card.assignedStaffName} 님이 응대 중입니다.</p>
+          <p className="alert">다른 직원이 응대 중입니다.</p>
         ) : (
           <>
             <button className="btn btn--primary" disabled={!canAccept} onClick={onAccept}>

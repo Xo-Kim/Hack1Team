@@ -115,7 +115,7 @@ class SessionTest {
         session.applyMood(analysis(), track(), false);
         session.requestAssist();
         clock.advance(Duration.ofSeconds(18));
-        session.acceptAssist(new StaffAssignment("staff-042", "김하늘", clock.instant()));
+        session.acceptAssist(new StaffAssignment("staff-042", clock.instant()));
         session.complete();
 
         assertThat(session.state()).isEqualTo(SessionState.ENDED);
@@ -217,7 +217,7 @@ class SessionTest {
     @DisplayName("직원이 응대를 놓으면 다시 요청 대기로 돌아가고 담당자가 비워진다")
     void releaseReturnsToQueue() {
         Session session = awaitingAssist();
-        session.acceptAssist(new StaffAssignment("staff-042", "김하늘", clock.instant()));
+        session.acceptAssist(new StaffAssignment("staff-042", clock.instant()));
 
         session.releaseAssist();
 
@@ -230,10 +230,10 @@ class SessionTest {
     @DisplayName("같은 직원의 재요청은 멱등하게 성공한다")
     void sameStaffAcceptIsIdempotent() {
         Session session = awaitingAssist();
-        session.acceptAssist(new StaffAssignment("staff-042", "김하늘", clock.instant()));
+        session.acceptAssist(new StaffAssignment("staff-042", clock.instant()));
         int eventsBefore = session.events().size();
 
-        session.acceptAssist(new StaffAssignment("staff-042", "김하늘", clock.instant()));
+        session.acceptAssist(new StaffAssignment("staff-042", clock.instant()));
 
         assertThat(session.state()).isEqualTo(SessionState.ASSIST_ACCEPTED);
         assertThat(session.events())
@@ -246,10 +246,10 @@ class SessionTest {
     @DisplayName("해제된 세션은 다른 직원이 이어받을 수 있다")
     void otherStaffCanTakeOverAfterRelease() {
         Session session = awaitingAssist();
-        session.acceptAssist(new StaffAssignment("staff-042", "김하늘", clock.instant()));
+        session.acceptAssist(new StaffAssignment("staff-042", clock.instant()));
         session.releaseAssist();
 
-        session.acceptAssist(new StaffAssignment("staff-099", "이바다", clock.instant()));
+        session.acceptAssist(new StaffAssignment("staff-099", clock.instant()));
 
         assertThat(session.assignedStaff()).get()
                 .extracting(StaffAssignment::staffId)
@@ -326,7 +326,7 @@ class SessionTest {
         session.applyMood(analysis(), track(), false);
         session.requestAssist();
         clock.advance(Duration.ofSeconds(42));
-        session.acceptAssist(new StaffAssignment("staff-042", "김하늘", clock.instant()));
+        session.acceptAssist(new StaffAssignment("staff-042", clock.instant()));
 
         // 도달 시간을 계산해 주는 메서드는 두지 않는다. 세션은 TTL 로 사라지지만
         // 이벤트는 남으므로, 지표는 이벤트 로그에서 뽑는 것이 맞는 자리다.

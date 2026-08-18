@@ -2,7 +2,6 @@ package com.example.back.service;
 
 import com.example.back.domain.Session;
 import com.example.back.domain.SessionState;
-import com.example.back.domain.StaffAssignment;
 import com.example.back.dto.ApiPayloads.AnalyzeResponse;
 import com.example.back.dto.ApiPayloads.SessionStateResponse;
 import com.example.back.dto.ApiPayloads.StartSessionRequest;
@@ -137,7 +136,6 @@ public class CustomerSessionService {
                 terminal ? null : session.analysis().orElse(null),
                 terminal ? null : session.track().orElse(null),
                 session.isAnalysisFallback(),
-                session.state() == SessionState.ASSIST_ACCEPTED,
-                session.assignedStaff().map(StaffAssignment::staffName).orElse(null));
+                session.state() == SessionState.ASSIST_ACCEPTED);
     }
 }

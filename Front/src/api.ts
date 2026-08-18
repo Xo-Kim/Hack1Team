@@ -123,10 +123,11 @@ export const staff = {
 
   card: (id: string) => request<StaffCard>(`/staff/sessions/${id}`),
 
-  accept: (id: string, staffId: string, staffName: string) =>
+  /** 이름은 보내지 않는다. 서버가 점유 판정에 쓰는 것은 staffId 뿐이다. */
+  accept: (id: string, staffId: string) =>
     request<StaffCard>(`/staff/sessions/${id}/accept`, {
       method: 'POST',
-      body: JSON.stringify({ staffId, staffName }),
+      body: JSON.stringify({ staffId }),
     }),
 
   release: (id: string, staffId: string) =>

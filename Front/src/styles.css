@@ -743,30 +743,11 @@ body {
   letter-spacing: -0.01em;
 }
 
-.staff__name {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
+/* 단말 식별자. 읽을 일은 거의 없고 두 대를 구분할 때만 본다. */
+.staff__id {
   margin-left: auto;
-}
-
-/* 인풋은 언더라인만. 박스는 textarea 에만 허용된다. */
-.staff__name input {
-  width: 180px;
-  padding: var(--space-xs) 0;
-  border: 0;
-  border-bottom: var(--border-hair) solid var(--mcm-line);
-  border-radius: var(--radius-none);
-  background: transparent;
-  color: var(--mcm-onyx);
-  font-family: var(--font-body);
-  font-size: var(--type-body);
-  transition: border-color var(--dur-fast) var(--ease-mcm);
-}
-
-.staff__name input:focus {
-  outline: none;
-  border-bottom: var(--border-action) solid var(--mcm-brass);
+  color: var(--mcm-ash);
+  font-family: var(--font-mono);
 }
 
 /* 연결이 끊긴 것을 숨기면 직원은 요청이 없는 것으로 오해한다. */

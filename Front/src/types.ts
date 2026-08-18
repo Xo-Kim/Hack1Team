@@ -125,7 +125,6 @@ export interface SessionStateResponse {
   fallback: boolean
   /** true 면 직원 응대가 시작된 것 — 음악만 줄이고 조명은 유지한다. */
   musicDucked: boolean
-  assistStaffName: string | null
 }
 
 /** ---- 직원 화면 전용 ---- */
@@ -139,8 +138,8 @@ export interface StaffSessionSummary {
   waitingSeconds: number | null
   conceptName: string | null
   needsAssist: boolean
+  /** 점유 중인 단말. 내 것인지만 비교한다 — 이름은 서버가 보관하지 않는다. */
   assignedStaffId: string | null
-  assignedStaffName: string | null
 }
 
 export interface StaffCard {
@@ -163,7 +162,6 @@ export interface StaffCard {
   recommendationFallback: boolean
   note: string | null
   assignedStaffId: string | null
-  assignedStaffName: string | null
 }
 
 export type NotificationType =

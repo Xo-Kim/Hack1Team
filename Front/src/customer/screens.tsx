@@ -219,13 +219,21 @@ export function MoodScreen({
         <Fact label="음향" value={audioLabel(audioMode, track, analysis)} />
       </div>
 
+      {/*
+        로딩 중에는 띄우지 않는다. 음원 로딩은 실측 3~4초인데 그 사이 이 버튼을 누르면
+        먼저 걸려 있던 재생이 중단되고, 그 중단이 '음원 실패'로 읽혀 신스가 켜졌다.
+      */}
       {(audioMode === 'blocked' || audioMode === 'none') && (
         <button className="btn btn--sm" onClick={onRetryAudio}>
           음악 재생하기
         </button>
       )}
 
-      {track && (
+      {/*
+        실제로 그 곡이 울릴 때만 표기한다. CC 저작자 표시는 저작물을 사용할 때의
+        의무이고, 신스로 폴백했는데 곡 크레딧이 남아 있으면 화면이 거짓말을 한다.
+      */}
+      {audioMode === 'track' && track && (
         <p className="credit">
           {track.title} — {track.artist}{' '}
           <a href={track.shareUrl} target="_blank" rel="noreferrer">
@@ -266,6 +274,7 @@ function Fact({ label, value }: { label: string; value: string }) {
  */
 function audioLabel(mode: AudioMode, track: MusicTrack | null, analysis: MoodAnalysis): string {
   if (mode === 'track' && track) return track.title
+  if (mode === 'loading') return '음향 준비 중'
   if (mode === 'blocked') return '재생 대기'
   if (mode === 'synth') return `${analysis.music.key} ${analysis.music.scale} · ${analysis.music.bpm} BPM`
   return '재생 대기'
@@ -307,10 +316,18 @@ export function ChoiceScreen({
 
 // ------------------------------------------------- 응대 대기 / 자율 관람
 
+/**
+ * 응대 대기 / 자율 관람.
+ * <p>
+ * <b>직원 이름을 쓰지 않는다.</b> 예전에는 "○○ 님이 곧 도착합니다"였는데, 그 이름은
+ * 직원이 단말에 손으로 적은 검증되지 않은 값이었다. 비워 두면 문장이 깨지고, 채우게
+ * 하면 응대할 때마다 입력을 강요한다. 고객이 알아야 하는 것은 누가 오는지가 아니라
+ * 기다리면 된다는 사실이므로 문구를 상태 기반으로 바꿨다.
+ */
 export function WaitingForStaffScreen({
   mode,
   analysis,
-  staffName,
+  serving,
   muted,
   onToggleMute,
   onCancelAssist,
@@ -319,15 +336,14 @@ export function WaitingForStaffScreen({
 }: {
   mode: 'assist' | 'self'
   analysis: MoodAnalysis
-  staffName: string | null
+  /** 직원이 응대를 잡았는지 (서버 상태 ASSIST_ACCEPTED). */
+  serving: boolean
   muted: boolean
   onToggleMute: () => void
   onCancelAssist: () => void
   onCallStaff: () => void
   onEnd: () => void
 }) {
-  const serving = staffName !== null
-
   return (
     <div className="screen screen--bottom">
       <div className="stack stack--tight">
@@ -335,13 +351,15 @@ export function WaitingForStaffScreen({
         <h2 className="title">
           {mode === 'assist'
             ? serving
-              ? `${staffName} 님이 곧 도착합니다`
+              ? '잠시만 기다려 주세요'
               : '곧 도와드리겠습니다'
             : '편하게 둘러보세요'}
         </h2>
         <p className="muted">
           {mode === 'assist'
-            ? '연출은 그대로 유지됩니다'
+            ? serving
+              ? '직원이 곧 도착합니다 · 연출은 그대로 유지됩니다'
+              : '연출은 그대로 유지됩니다'
             : '필요하시면 언제든 직원을 부르실 수 있어요'}
         </p>
       </div>

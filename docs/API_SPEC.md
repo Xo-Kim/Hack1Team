@@ -97,13 +97,14 @@ IDLE ──▶ CONSENTED ──▶ ANALYZING ──▶ MOOD_ACTIVE
   "analysis": { "outfit": {...}, "mood": "...", "conceptName": "...", "lighting": {...}, "music": {...} },
   "track": { "id": "...", "title": "...", "artist": "...", "audioUrl": "..." },
   "fallback": false,
-  "musicDucked": true,
-  "assistStaffName": "김직원"
+  "musicDucked": true
 }
 ```
 
 - `musicDucked` 가 true 면 직원 응대가 시작된 것이다. **음악 볼륨을 낮추고 조명은 유지**한다.
   클라이언트가 상태값으로 추론하지 않도록 서버가 직접 알려준다.
+- **직원 이름은 내려가지 않는다.** 고객 화면 안내는 `state` 로 만든다 —
+  `ASSIST_REQUESTED` 는 "곧 도와드리겠습니다", `ASSIST_ACCEPTED` 는 "잠시만 기다려 주세요".
 - 종료된 세션에서는 `analysis` · `track` 이 null 이다. 만료 직후 도착한 폴링 응답이
   조명·음악을 되살리는 것을 막는다.
 - **이 응답에 추천 필드를 추가하지 말 것.**
@@ -187,8 +188,7 @@ multipart 대신 JSON 을 쓰는 이유는 프라이버시다. multipart 는 임
   "waitingSeconds": 18,
   "conceptName": "Berlin Blue Hour",
   "needsAssist": true,
-  "assignedStaffId": null,
-  "assignedStaffName": null
+  "assignedStaffId": null
 }]
 ```
 
@@ -223,7 +223,7 @@ multipart 대신 JSON 을 쓰는 이유는 프라이버시다. multipart 는 임
   "analysisFallback": false,
   "recommendationFallback": false,
   "note": null,
-  "assignedStaffId": "staff-01", "assignedStaffName": "김직원"
+  "assignedStaffId": "staff-01"
 }
 ```
 
@@ -240,12 +240,15 @@ multipart 대신 JSON 을 쓰는 이유는 프라이버시다. multipart 는 임
 ### `POST /api/staff/sessions/{sessionId}/accept`
 
 ```json
-{ "staffId": "staff-01", "staffName": "김직원" }
+{ "staffId": "staff-01" }
 ```
 
 **중복 응대 방지 지점이다.**
 
-- 이미 다른 직원이 점유 중이면 **409 `assist_conflict`**
+- **직원 이름은 받지 않는다.** 이름의 유일한 용도가 고객 화면 문구였는데 그 문구가
+  상태 기반으로 바뀌었다. 남기면 응대마다 입력을 강요하고, 검증되지 않은 자기 신고값이
+  고객 화면까지 흘러간다
+- 이미 다른 직원이 점유 중이면 **409 `assist_conflict`** (응답 메시지에 점유자를 밝히지 않는다)
 - 같은 직원의 재요청은 버튼 중복 클릭이므로 조용히 성공한다 (멱등)
 - **'혼자 볼게요' 세션은 409 `illegal_state`** — 고객이 거절한 응대를 직원이 밀어붙일 수 없다
 - 점유되면 고객 화면의 `musicDucked` 가 true 로 바뀐다

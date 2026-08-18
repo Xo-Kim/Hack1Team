@@ -123,7 +123,7 @@ public class StaffController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "점유 성공. 갱신된 응대 카드",
                     content = @Content(schema = @Schema(implementation = StaffCard.class))),
-            @ApiResponse(responseCode = "400", description = "staffId 또는 staffName 누락",
+            @ApiResponse(responseCode = "400", description = "staffId 누락",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "세션 만료 또는 없음",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
