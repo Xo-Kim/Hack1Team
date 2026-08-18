@@ -34,12 +34,18 @@ export function StaffHeader({
       <div>
         <h1>MCM 무드 미러 — 직원</h1>
         <p className="muted">
-          {waiting > 0 ? `대기 ${waiting}건` : '대기 중 — 응대 가능 상태'}
+          {waiting > 0 ? (
+            <>
+              대기 <span className="data">{waiting}</span>건
+            </>
+          ) : (
+            '대기 중 — 응대 가능'
+          )}
         </p>
       </div>
 
       <label className="staff__name">
-        <span>내 이름</span>
+        <span className="label">Staff</span>
         <input
           value={me.staffName}
           placeholder="고객 화면에 표시됩니다"
@@ -48,10 +54,10 @@ export function StaffHeader({
       </label>
 
       {/* 알림이 끊긴 것을 조용히 숨기면 직원은 요청이 없는 것으로 오해한다. */}
-      <span className={`conn conn--${connection}`}>
-        {connection === 'live' && '실시간 연결됨'}
-        {connection === 'connecting' && '연결 중'}
-        {connection === 'polling' && '폴링으로 동작 중'}
+      <span className={`conn conn--${connection} label`}>
+        {connection === 'live' && 'Live'}
+        {connection === 'connecting' && 'Connecting'}
+        {connection === 'polling' && 'Polling'}
       </span>
     </header>
   )
@@ -68,11 +74,16 @@ export function Toast({
 }) {
   return (
     <button className="toast" onClick={onOpen}>
-      <strong>
-        {notification.reminder ? '아직 미확인 요청' : '새 도움 요청'}
-        {notification.reminder && ` · ${notification.waitingSeconds}초 대기`}
-      </strong>
-      <span>{notification.mirrorLabel ?? notification.mirrorId}</span>
+      <strong>{notification.reminder ? '미확인 요청' : '도움 요청'}</strong>
+      <span>
+        {notification.mirrorLabel ?? notification.mirrorId}
+        {notification.reminder && (
+          <>
+            {' · '}
+            <span className="data">{notification.waitingSeconds}</span>초 대기
+          </>
+        )}
+      </span>
       <span className="toast__cta">열기</span>
     </button>
   )
@@ -167,8 +178,16 @@ export function AssistCard({
         <div>
           <h2>{card.mirrorLabel ?? card.mirrorId}</h2>
           <p className="muted">
-            {STATE_LABEL[card.state] ?? card.state} · 경과 {card.elapsedSeconds}초
-            {card.waitingSeconds !== null && ` · 대기 ${card.waitingSeconds}초`}
+            {STATE_LABEL[card.state] ?? card.state} · 경과{' '}
+            <span className="data">{card.elapsedSeconds}</span>초
+            {card.waitingSeconds !== null && (
+              <>
+                {' · 대기 '}
+                <span className="data">{card.waitingSeconds}</span>초
+              </>
+            )}
+            {' · '}
+            <span className="data">{card.sessionId.slice(-6)}</span>
           </p>
         </div>
         <button className="btn" onClick={onClose}>
@@ -231,22 +250,20 @@ export function AssistCard({
         ) : (
           <p className="muted">아직 분석 전입니다.</p>
         )}
-        {card.analysisFallback && (
-          <p className="tiny">AI 분석 실패 — 기본 프리셋이 적용된 세션입니다.</p>
-        )}
+        {card.analysisFallback && <p className="tiny">기본 프리셋 적용 세션</p>}
       </div>
 
       {/* 추천 제품 */}
       <div className="card__recs">
         <div className="card__recs-head">
           <h3>추천 제품</h3>
-          <span className="tiny">카탈로그 검증을 통과한 제품만 표시됩니다</span>
+          <span className="tiny">검증된 제품만</span>
         </div>
 
         {card.recommendationFallback && (
           <p className="alert alert--soft">
-            AI 랭킹이 실패해 규칙 기반으로 대체됐습니다. <strong>추천 이유가 템플릿
-            문장이므로 그대로 읽지 마세요.</strong>
+            규칙 기반으로 선정된 목록입니다. 추천 이유가 템플릿 문장이므로 그대로 읽지
+            마세요.
           </p>
         )}
 

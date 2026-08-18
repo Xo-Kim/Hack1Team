@@ -9,18 +9,22 @@ import type { Lighting } from './types'
  * "조명이 들어왔다"로 읽힌다. 그래서 video 에 filter 를, 그 위에
  * blend 레이어를 얹는 2단 구성을 쓴다.
  */
+/**
+ * 오버레이 불투명도 상한. 디자인 가이드 §1 무드 필터.
+ * 넘으면 필터가 아니라 색유리가 되어 고객이 자기 착장을 못 본다.
+ */
+const MAX_TINT = 0.6
+
 export function lightingToCssVars(lighting: Lighting | null): CSSProperties {
   if (!lighting) {
     return {
-      '--primary': '#0b0b0d',
-      '--accent': '#2a2a30',
-      '--transition': '2400ms',
-      '--video-brightness': 0.55,
+      '--mood-primary': '#111111',
+      '--mood-accent': '#2a2a30',
+      '--mood-brightness': 0.55,
       '--video-contrast': 1.02,
-      '--video-saturate': 0.75,
+      '--video-saturate': 0.95,
       '--tint-primary-opacity': 0.25,
       '--tint-accent-opacity': 0.1,
-      '--breathe-scale': 0,
     } as CSSProperties
   }
 
@@ -28,21 +32,23 @@ export function lightingToCssVars(lighting: Lighting | null): CSSProperties {
 
   // 색온도가 낮을수록(따뜻할수록) 채도를 올린다. 2000K → 1.3, 6500K → 0.85
   const warmth = clamp01((6500 - lighting.colorTemperatureK) / 4500)
-  const saturate = 0.85 + warmth * 0.45
 
   return {
-    '--primary': lighting.primaryColor,
-    '--accent': lighting.accentColor,
-    '--transition': `${lighting.transitionMs}ms`,
+    '--mood-primary': lighting.primaryColor,
+    '--mood-accent': lighting.accentColor,
     // 어두운 씬에서도 인물이 사라지지 않도록 하한을 둔다.
-    '--video-brightness': (0.45 + b * 0.8).toFixed(3),
+    '--mood-brightness': (0.45 + b * 0.8).toFixed(3),
     '--video-contrast': (1.0 + (1 - b) * 0.25).toFixed(3),
-    '--video-saturate': saturate.toFixed(3),
+    '--video-saturate': (0.85 + warmth * 0.45).toFixed(3),
     // 밝은 씬일수록 틴트를 옅게 — 안 그러면 하얗게 날아간다.
-    '--tint-primary-opacity': (0.62 - b * 0.25).toFixed(3),
-    '--tint-accent-opacity': (0.5 - b * 0.18).toFixed(3),
-    '--breathe-scale': lighting.effect === 'breathe' ? 1 : 0,
+    '--tint-primary-opacity': cap(0.62 - b * 0.25),
+    '--tint-accent-opacity': cap(0.5 - b * 0.18),
   } as CSSProperties
+}
+
+/** 상한을 넘지 않도록 자른다. LLM 이 어떤 값을 주든 착장은 보여야 한다. */
+function cap(v: number): string {
+  return Math.min(MAX_TINT, Math.max(0, v)).toFixed(3)
 }
 
 /** effect 값을 stage 클래스로. */

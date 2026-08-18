@@ -5,6 +5,26 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MCM Mood Mirror</title>
+
+    <!--
+      디자인 가이드 §2 서체 3종.
+      Newsreader  영문 헤드라인 — MCM 로고타입과 같은 저대비 세리프 계열
+      Pretendard  한글 + 영문 본문
+      JetBrains Mono  데이터(세션ID·시각·경과시간)와 대문자 라벨
+
+      네트워크가 끊기면 각 계열의 시스템 폰트로 폴백된다. LLM·음원이 이미
+      네트워크에 의존하므로 오프라인은 데모 조건이 아니다.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+    />
   </head>
   <body>
     <div id="root"></div>

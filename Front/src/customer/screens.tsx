@@ -17,12 +17,11 @@ export function IdleScreen({ onStart }: { onStart: () => void }) {
     <div className="screen screen--center">
       <div className="brandmark">MCM</div>
       <div className="stack stack--tight">
-        <h1 className="title">MCM 무드 미러에 오신 것을 환영합니다</h1>
-        <p className="lead">나만의 스타일을 발견하는 순간</p>
-        <p className="muted">AI가 당신의 착장을 분석하고 맞춤 무드를 연출해 드립니다</p>
+        <h1 className="title">무드 미러</h1>
+        <p className="lead">착장을 읽고 조명과 음악을 맞춥니다</p>
       </div>
-      <button className="btn btn--primary btn--lg" onClick={onStart}>
-        시작하기
+      <button className="btn btn--primary" onClick={onStart}>
+        시작
       </button>
     </div>
   )
@@ -178,7 +177,9 @@ export function AnalyzingScreen({ step }: { step: number }) {
         ))}
       </ul>
 
-      <p className="muted">분석이 완료되면 당신만의 무드 연출이 시작됩니다</p>
+      <div className="progress">
+        <span className="progress__bar" />
+      </div>
     </div>
   )
 }
@@ -190,8 +191,6 @@ export function MoodScreen({
   track,
   audioMode,
   muted,
-  fallback,
-  elapsedMs,
   onToggleMute,
   onRetryAudio,
   onNext,
@@ -201,8 +200,6 @@ export function MoodScreen({
   track: MusicTrack | null
   audioMode: AudioMode
   muted: boolean
-  fallback: boolean
-  elapsedMs: number | null
   onToggleMute: () => void
   onRetryAudio: () => void
   onNext: () => void
@@ -211,7 +208,7 @@ export function MoodScreen({
   return (
     <div className="screen screen--bottom">
       <div className="stack stack--tight">
-        <p className="eyebrow">YOUR MOOD IS READY</p>
+        <p className="label">Mood ready</p>
         <h1 className="concept">{analysis.conceptName}</h1>
         {analysis.styleComment && <p className="lead">{analysis.styleComment}</p>}
       </div>
@@ -230,8 +227,7 @@ export function MoodScreen({
 
       {track && (
         <p className="credit">
-          {track.title} — {track.artist}
-          {track.reason && <span className="badge">AI 선곡</span>}{' '}
+          {track.title} — {track.artist}{' '}
           <a href={track.shareUrl} target="_blank" rel="noreferrer">
             {track.license}
           </a>
@@ -239,20 +235,16 @@ export function MoodScreen({
       )}
 
       <div className="row">
-        <button className="btn btn--primary btn--lg" onClick={onNext}>
+        <button className="btn btn--primary" onClick={onNext}>
           다음
         </button>
-        <button className="btn" onClick={onToggleMute}>
+        <button className="btn btn--sm" onClick={onToggleMute}>
           {muted ? '음악 켜기' : '음악 끄기'}
         </button>
-        <button className="btn" onClick={onReset}>
+        <button className="btn btn--sm" onClick={onReset}>
           처음부터
         </button>
       </div>
-
-      <p className="tiny">
-        {fallback ? '기본 연출 프리셋' : `AI 분석 · ${((elapsedMs ?? 0) / 1000).toFixed(1)}초`}
-      </p>
     </div>
   )
 }
@@ -260,7 +252,7 @@ export function MoodScreen({
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="fact">
-      <span className="fact__label">{label}</span>
+      <span className="label">{label}</span>
       <span className="fact__value">{value}</span>
     </div>
   )
@@ -338,7 +330,7 @@ export function WaitingForStaffScreen({
   return (
     <div className="screen screen--bottom">
       <div className="stack stack--tight">
-        <p className="eyebrow">{analysis.conceptName}</p>
+        <p className="label">{analysis.conceptName}</p>
         <h2 className="title">
           {mode === 'assist'
             ? serving

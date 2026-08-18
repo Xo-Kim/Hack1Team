@@ -60,8 +60,6 @@ export function MirrorApp() {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [analysis, setAnalysis] = useState<MoodAnalysis | null>(null)
   const [track, setTrack] = useState<MusicTrack | null>(null)
-  const [fallback, setFallback] = useState(false)
-  const [analyzeMs, setAnalyzeMs] = useState<number | null>(null)
 
   const [audioMode, setAudioMode] = useState<AudioMode>('none')
   const [muted, setMuted] = useState(false)
@@ -93,8 +91,6 @@ export function MirrorApp() {
     setSessionId(null)
     setAnalysis(null)
     setTrack(null)
-    setFallback(false)
-    setAnalyzeMs(null)
     setAudioMode('none')
     setMuted(false)
     setStaffName(null)
@@ -152,16 +148,16 @@ export function MirrorApp() {
     setPhase('analyzing')
     setStep(0)
     const stepTimer = window.setInterval(() => setStep((s) => Math.min(s + 1, 2)), 1200)
-    const startedAt = performance.now()
 
     try {
       const res = await mirror.analyze(sessionId, dataUrl)
       window.clearInterval(stepTimer)
 
-      setAnalyzeMs(Math.round(performance.now() - startedAt))
+      // 폴백 여부는 고객 화면에 드러내지 않는다. 카피 보이스 §8 —
+      // 폴백 상황에서도 변명하지 않는다. 확인이 필요하면 직원 카드의
+      // analysisFallback 또는 서버 로그를 본다.
       setAnalysis(res.analysis)
       setTrack(res.track)
-      setFallback(res.fallback)
       setPhase('mood')
 
       // 빛과 소리를 같은 시간에 걸쳐 올린다.
@@ -378,8 +374,6 @@ export function MirrorApp() {
             track={track}
             audioMode={audioMode}
             muted={muted}
-            fallback={fallback}
-            elapsedMs={analyzeMs}
             onToggleMute={toggleMute}
             onRetryAudio={retryAudio}
             onNext={() => setPhase('choice')}
