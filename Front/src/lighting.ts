@@ -20,7 +20,7 @@ export function lightingToCssVars(lighting: Lighting | null): CSSProperties {
     return {
       '--mood-primary': '#111111',
       '--mood-accent': '#2a2a30',
-      '--mood-brightness': 0.55,
+      '--mood-brightness': 0.72,
       '--video-contrast': 1.02,
       '--video-saturate': 0.95,
       '--tint-primary-opacity': 0.25,
@@ -36,8 +36,14 @@ export function lightingToCssVars(lighting: Lighting | null): CSSProperties {
   return {
     '--mood-primary': lighting.primaryColor,
     '--mood-accent': lighting.accentColor,
-    // 어두운 씬에서도 인물이 사라지지 않도록 하한을 둔다.
-    '--mood-brightness': (0.45 + b * 0.8).toFixed(3),
+    /*
+     * 어두운 씬에서도 인물이 사라지지 않도록 하한을 둔다.
+     *
+     * 예전 식(0.45 + b*0.8)은 b=0.3 짜리 야간 씬에서 영상을 69% 까지 눌렀고,
+     * 그 위에 비네트와 스크림이 겹치면 착장도 조명색도 보이지 않았다. 하한을
+     * 올리고 기울기를 낮춰 어두운 씬의 바닥을 들어올린다.
+     */
+    '--mood-brightness': (0.62 + b * 0.55).toFixed(3),
     '--video-contrast': (1.0 + (1 - b) * 0.25).toFixed(3),
     '--video-saturate': (0.85 + warmth * 0.45).toFixed(3),
     // 밝은 씬일수록 틴트를 옅게 — 안 그러면 하얗게 날아간다.

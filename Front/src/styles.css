@@ -35,6 +35,16 @@
   --type-hero: clamp(2.5rem, 5vw, 4.5rem);
   --type-h2: clamp(1.5rem, 2.5vw, 2.25rem);
   --type-body: 1rem;
+
+  /*
+   * 거울 화면 전용 스케일.
+   *
+   * 여기서는 영상이 주인공이고 글자는 자막이다. hero(최대 72px)로 컨셉명을 쓰면
+   * 화면 절반이 글자가 되고, 그걸 읽히게 하려고 스크림을 깔면 정작 확인해야 할
+   * 조명 필터가 검정에 묻힌다. 그래서 거울 위에서는 한 단계씩 낮춘다.
+   */
+  --type-mirror-title: clamp(1.5rem, 2.2vw, 2rem);
+  --type-mirror-sub: 0.9375rem;
   --type-caption: 0.8125rem;
   --type-label: 0.6875rem;
   --type-mono-data: 0.875rem;
@@ -148,7 +158,7 @@ body {
   object-fit: cover;
   transform: scaleX(-1); /* 거울이므로 좌우 반전 */
   filter: saturate(var(--video-saturate, 1.1)) contrast(var(--video-contrast, 1.05))
-    brightness(var(--mood-brightness)) sepia(0.12);
+    brightness(var(--mood-brightness)) sepia(0.06);
   transition: filter var(--dur-mood) var(--ease-mcm);
 }
 
@@ -188,11 +198,18 @@ body {
   opacity: 0;
 }
 
+/*
+ * 비네트.
+ *
+ * 예전 값(45% 부터 검정 0.75)은 인물이 서는 자리까지 어둡게 눌러, AI 가 내려준
+ * 조명색이 실제로 얹혔는지 눈으로 확인할 수 없었다. 비네트는 가장자리를 정리하는
+ * 장치이지 밝기 조절기가 아니므로, 중앙을 넓게 비우고 최종 농도도 낮춘다.
+ */
 .vignette {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(120% 90% at 50% 45%, transparent 45%, rgba(17, 17, 17, 0.75));
+  background: radial-gradient(125% 95% at 50% 42%, transparent 62%, rgba(17, 17, 17, 0.46));
 }
 
 /* 필름 그레인. 디지털 화면 느낌을 깎아내 조명처럼 보이게 한다. */
@@ -217,11 +234,11 @@ body {
   0%,
   100% {
     filter: saturate(var(--video-saturate, 1.1)) contrast(var(--video-contrast, 1.05))
-      brightness(calc(var(--mood-brightness) - 0.05)) sepia(0.12);
+      brightness(calc(var(--mood-brightness) - 0.05)) sepia(0.06);
   }
   50% {
     filter: saturate(var(--video-saturate, 1.1)) contrast(var(--video-contrast, 1.05))
-      brightness(calc(var(--mood-brightness) + 0.05)) sepia(0.12);
+      brightness(calc(var(--mood-brightness) + 0.05)) sepia(0.06);
   }
 }
 
@@ -276,12 +293,32 @@ body {
 
 /*
  * 아래쪽에만 붙는다. 거울은 위쪽이 주인공이다.
- * 동적 색 위의 텍스트라 대비를 보장할 수 없으므로 스크림이 필수다.
+ *
+ * 동적 색 위의 텍스트라 스크림 자체는 필수지만, <b>화면 전체를 덮으면 안 된다.</b>
+ * 예전에는 30% 지점부터 검정이 차올라 상반신까지 눌렀고, 그래서 조명 필터가
+ * 들어왔는지 확인할 수 없었다. 이제 글자가 실제로 놓이는 아래쪽 띠에만 깐다.
  */
 .screen--bottom {
   justify-content: flex-end;
   align-items: flex-start;
-  background: linear-gradient(transparent 30%, rgba(17, 17, 17, 0.55) 55%, rgba(17, 17, 17, 0.88));
+  gap: var(--space-sm);
+  padding: var(--space-lg) var(--space-lg) var(--space-md);
+  background: linear-gradient(transparent 62%, rgba(17, 17, 17, 0.62) 84%, rgba(17, 17, 17, 0.9));
+}
+
+/*
+ * 글자 구역을 좌하단 한 칸으로 묶는다. 가로로 끝까지 흐르면 시선이 화면을 훑고,
+ * 정작 거울이 배경으로 밀린다. 오른쪽 절반은 비워 둔다 — 거기 사람이 서 있다.
+ */
+.screen--bottom > * {
+  width: min(46ch, 62%);
+}
+
+/* 버튼은 내용 폭을 따른다. 폭을 강제하면 46ch 짜리 거대한 버튼이 된다. */
+.screen--bottom > .row,
+.screen--bottom > .btn {
+  width: auto;
+  max-width: 100%;
 }
 
 /* 읽어야 하는 화면(동의·권한)은 카메라 영상을 눌러 가독성을 확보한다. */
@@ -422,6 +459,20 @@ body {
 .btn--sm {
   padding: 12px 24px;
   font-size: var(--type-caption);
+}
+
+/* 거울 아래 버튼 줄. 조작부가 화면을 차지하면 거울이 아니라 키오스크가 된다. */
+.screen--bottom .btn {
+  padding: 13px 28px;
+  font-size: var(--type-caption);
+}
+
+.screen--bottom .btn--sm {
+  padding: 11px 20px;
+}
+
+.screen--bottom .credit {
+  font-size: var(--type-label);
 }
 
 .row {
@@ -587,34 +638,69 @@ body {
   }
 }
 
-/* 영문 컨셉명 — 세리프의 자리. */
+/* 영문 컨셉명 — 세리프의 자리. opsz 는 실제 크기에 맞춘다. */
 .concept {
   margin: 0;
   font-family: var(--font-display);
-  font-size: var(--type-hero);
-  font-variation-settings: 'opsz' 72;
+  font-size: var(--type-mirror-title);
+  font-variation-settings: 'opsz' 32;
   font-weight: 500;
-  letter-spacing: -0.015em;
-  line-height: 1.1;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
 }
 
+/* 거울 위 본문. 자막 크기로 내린다. */
+.screen--bottom .title {
+  font-size: var(--type-mirror-title);
+}
+
+.screen--bottom .lead {
+  font-size: var(--type-mirror-sub);
+  line-height: 1.6;
+}
+
+/*
+ * 연출 요약. 위아래 선으로 화면을 가로지르던 띠였는데, 그 선 두 줄이
+ * 거울을 상하로 잘라 놓았다. 왼쪽 세로선 하나로 줄인다.
+ */
 .facts {
   display: flex;
-  gap: var(--space-lg);
+  gap: var(--space-md);
   flex-wrap: wrap;
-  padding: var(--space-md) 0;
-  border-top: var(--border-hair) solid rgba(255, 255, 255, 0.22);
-  border-bottom: var(--border-hair) solid rgba(255, 255, 255, 0.22);
+  padding: 2px 0 2px var(--space-sm);
+  border-left: var(--border-hair) solid rgba(255, 255, 255, 0.3);
 }
 
 .fact {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  gap: 2px;
 }
 
 .fact__value {
-  font-size: var(--type-body);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--type-mirror-sub);
+}
+
+/*
+ * 조명 스와치.
+ *
+ * 화면에 얹힌 색과 서버가 내려준 색을 나란히 두면, 필터가 실제로 동작하는지
+ * 한눈에 대조된다. 이게 없으면 "조명: Berlin Blue Hour" 라는 글자만 있고
+ * 그 색이 영상에 걸렸는지 확인할 방법이 없다.
+ */
+.fact__chips {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.fact__chip {
+  width: 14px;
+  height: 14px;
+  border: var(--border-hair) solid rgba(255, 255, 255, 0.4);
+  border-radius: var(--radius-none);
 }
 
 /* CC 라이선스의 저작자 표시는 준수 요건이다. 장식이 아니므로 지우지 말 것. */
@@ -663,8 +749,9 @@ body {
   border-color: var(--mcm-brass);
 }
 
+/* 버튼 안의 글자다. 제목 크기로 두면 선택지가 아니라 표지판이 된다. */
 .choice__title {
-  font-size: var(--type-h2);
+  font-size: var(--type-mirror-title);
   font-weight: 500;
   letter-spacing: -0.01em;
 }

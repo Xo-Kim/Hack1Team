@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { AudioMode } from '../audio/moodAudio'
 import type { CameraState } from '../hooks/useCamera'
 import type { MoodAnalysis, MusicTrack } from '../types'
@@ -214,8 +214,16 @@ export function MoodScreen({
       </div>
 
       <div className="facts">
-        <Fact label="컨셉" value={analysis.conceptName} />
-        <Fact label="조명" value={analysis.lighting.sceneName} />
+        <Fact label="조명" value={analysis.lighting.sceneName}>
+          {/*
+            서버가 내려준 조명색을 그대로 찍는다. 영상에 얹힌 색과 이 두 칩을 나란히
+            보면 필터가 실제로 동작하는지 대조할 수 있다 — 씬 이름만으로는 알 수 없다.
+          */}
+          <span className="fact__chips">
+            <span className="fact__chip" style={{ background: analysis.lighting.primaryColor }} />
+            <span className="fact__chip" style={{ background: analysis.lighting.accentColor }} />
+          </span>
+        </Fact>
         <Fact label="음향" value={audioLabel(audioMode, track, analysis)} />
       </div>
 
@@ -257,11 +265,22 @@ export function MoodScreen({
   )
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+function Fact({
+  label,
+  value,
+  children,
+}: {
+  label: string
+  value: string
+  children?: ReactNode
+}) {
   return (
     <div className="fact">
       <span className="label">{label}</span>
-      <span className="fact__value">{value}</span>
+      <span className="fact__value">
+        {value}
+        {children}
+      </span>
     </div>
   )
 }
