@@ -1,0 +1,12 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "buildCommand": "./gradlew clean build -x check -x test -Pproduction"
+  },
+  "deploy": {
+    "startCommand": "java -jar build/libs/app.jar",
+    "healthcheckPath": "/api/health",
+    "healthcheckTimeout": 120,
+    "restartPolicyType": "ON_FAILURE"
+  }
+}

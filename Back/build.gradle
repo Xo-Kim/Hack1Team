@@ -33,3 +33,28 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+// 실행 산출물을 build/libs/app.jar 하나로 고정한다.
+//
+// 배포 플랫폼이 만들어 주는 기본 실행 명령은 대개 와일드카드로 jar 를 찾는다.
+//   java -jar $(ls -1 <서브프로젝트>/build/libs/<별표>jar | head -n 1)
+// 여기에 이 프로젝트가 걸리는 지점이 둘 있었다.
+//
+// 1. 경로 — 저 패턴은 멀티모듈(루트 + 서브프로젝트) 배치를 가정한다. 배포 루트가
+//    Back/ 이면 jar 는 build/libs/ 에 바로 생기므로 아무것도 매칭되지 않고,
+//    java 가 인자 없이 실행돼 사용법만 출력하고 끝난다. 실제 증상이 이것이었다.
+//
+// 2. 이름 — 경로를 고쳐도 jar 가 둘이면 ls 정렬상 -plain.jar 가 먼저 잡힌다
+//    ('-' 0x2D < '.' 0x2E). 그건 Main-Class 도 의존성도 없는 껍데기라
+//    "no main manifest attribute" 로 죽는다.
+//
+// 이름을 박고 plain jar 를 끄면 두 문제가 같이 사라진다. 실행 명령도
+// 와일드카드 없이 단정하게 적을 수 있다 — java -jar build/libs/app.jar
+tasks.named('bootJar') {
+    archiveFileName = 'app.jar'
+}
+
+// 라이브러리로 쓰지 않으므로 plain jar 는 만들지 않는다.
+tasks.named('jar') {
+    enabled = false
+}

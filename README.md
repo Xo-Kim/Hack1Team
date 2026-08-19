@@ -10,6 +10,8 @@
 | [docs/LLM_SPEC.md](docs/LLM_SPEC.md) | LLM 3회 호출 스펙 |
 | [docs/EXPERIENCE_SPEC.md](docs/EXPERIENCE_SPEC.md) | 조명 · 음향 · 공유 설계 |
 | [docs/PRIVACY.md](docs/PRIVACY.md) | 이미지 처리 · 저장 금지 제약 |
+| [docs/DESIGN_GUIDE.md](docs/DESIGN_GUIDE.md) | **컬러 · 타이포 · 형태 · 모션 토큰과 규칙** |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | 배포 — 툴체인 · PORT · 환경변수 · 프론트 서빙 |
 
 ---
 
@@ -159,8 +161,15 @@ POST   /sessions/{id}/assist-request  ══push══▶│ event: assist_reque
 GET    /sessions/{id}  ◀──────────────  POST /sessions/{id}/accept
   musicDucked: true                       다른 직원이 점유 중이면 409
   볼륨만 낮추고 조명은 유지               POST /sessions/{id}/release
-                                          POST /sessions/{id}/complete → ENDED
+  ↓                                       POST /sessions/{id}/complete
+POST   /sessions/{id}/end → ENDED           응대만 닫고 세션은 유지
+  고객이 직접 마쳐야 끝난다
 ```
+
+**세션을 끝낼 수 있는 것은 고객뿐이다.** 직원이 '응대 완료'를 눌러도 세션은
+`MOOD_ACTIVE` 로 돌아갈 뿐 화면이 꺼지지 않는다 — 고객이 아직 거울 앞에 있는데
+화면이 초기화되면 그 자체로 쫓아내는 신호가 된다. 완주(`ENDED`)와
+이탈(`EXPIRED`)을 가르는 것도 이 지점이다.
 
 **알림은 SSE 푸시다.** 서버 → 직원 단방향이라 WebSocket 을 쓰지 않았다. 일반 HTTP 라
 매장 방화벽을 그대로 통과하고 끊기면 브라우저가 알아서 재연결한다. 실측 전달 0.4초.
@@ -179,11 +188,12 @@ GET    /sessions/{id}  ◀──────────────  POST /sess
 
 | 화면 | 내용 | 상태 |
 |---|---|---|
-| 미러 디스플레이 | 조명·음악·컨셉명 — **감각** | 프로토타입 존재 (세션 API 미대응) |
-| 직원 태블릿 | 무드·팔레트·추천 3종·근거 — **지능** | **미착수.** 현재 `StaffPanel` 이 고객 앱 안에 있다 |
+| 미러 디스플레이 `/` | 조명·음악·컨셉명 — **감각** | **완료.** 세션 API 대응 |
+| 직원 태블릿 `/staff` | 무드·팔레트·추천 3종·근거 — **지능** | **완료.** SSE 알림 + 중복 응대 방지 |
 
-백엔드는 갈라졌지만 프론트는 아직 한 앱이다. `StaffPanel` 을 별도 라우트로 떼어내는
-것이 남은 작업이며, 그 전까지 고객 화면 코드에서 직원용 응답을 부를 수 있다.
+두 화면은 라우트로 갈라져 있고 서로의 데이터에 닿지 않는다. 고객 화면 코드에는
+추천을 부르는 경로 자체가 없다 — `api.ts` 가 `mirror` / `staff` 로 나뉘어 있고,
+미러 컴포넌트는 `staff.*` 를 import 하지 않는다.
 
 ---
 
@@ -215,8 +225,11 @@ Front/
   lighting.ts                     Lighting 스펙 → CSS 변수
   audio/moodAudio.ts              재생 단일 창구 (음원 ↔ 앰비언스 폴백)
   audio/moodSynth.ts              MusicSpec → Web Audio 절차적 앰비언스
-  components/Overlays.tsx         대기 · 카운트다운 · 분석중 · 컨셉 카드
-  components/StaffPanel.tsx       응대 카드
+  customer/MirrorApp.tsx          고객 상태 머신 (대기→동의→촬영→분석→연출→선택)
+  customer/screens.tsx            와이어프레임 n3·n4·n6·n9·n12·n14
+  staff/StaffApp.tsx              직원 단말. 이 앱만 추천을 본다
+  staff/screens.tsx               와이어프레임 n28·n29·n33·n35
+  hooks/useStaffNotifications     SSE 구독 + 폴링 폴백
   styles.css                      조명 레이어 · blend · 그레인 · breathe/sweep
 ```
 
@@ -349,9 +362,9 @@ Jamendo 의 CC 라이선스는 대부분 저작자 표시(BY)를 요구한다. �
 |---|---|
 | F-7 분기 선택 (직원 도움 / 혼자 볼게요) | 컨셉 카드의 버튼으로 축약. 정식 분기 화면 없음 |
 | F-9 직원 실시간 알림 | **완료.** SSE 푸시 + 60초 재알림. 폴링은 폴백으로 유지 |
-| F-10 직원 화면 (별도 라우트) | **백엔드만 완료.** 프론트는 아직 고객 앱 안에 있음 |
-| F-11 응대 모드 | 백엔드 `musicDucked` 제공. 프론트 연동 전 |
-| F-14 리셋 (타임아웃) | 프론트 로컬만. **서버 리셋 호출 미연동** |
+| F-10 직원 화면 (별도 라우트) | **완료.** `/staff` |
+| F-11 응대 모드 | **완료.** `musicDucked` 로 볼륨만 하향, 조명 유지 |
+| F-14 리셋 (타임아웃) | **완료.** 무입력 3분 → 서버 `reset` 호출 |
 | F-18 진행 단계 리빌 | 있음 |
 | 실제 조명·음향 하드웨어 | 범위 외. 스펙만 하드웨어 중립으로 정의 |
 
