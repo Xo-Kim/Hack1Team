@@ -11,6 +11,7 @@
 | [docs/EXPERIENCE_SPEC.md](docs/EXPERIENCE_SPEC.md) | 조명 · 음향 · 공유 설계 |
 | [docs/PRIVACY.md](docs/PRIVACY.md) | 이미지 처리 · 저장 금지 제약 |
 | [docs/DESIGN_GUIDE.md](docs/DESIGN_GUIDE.md) | **컬러 · 타이포 · 형태 · 모션 토큰과 규칙** |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | 배포 — 툴체인 · PORT · 환경변수 · 프론트 서빙 |
 
 ---
 

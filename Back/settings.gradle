@@ -1,1 +1,19 @@
+/*
+ * 툴체인 자동 다운로드.
+ *
+ * build.gradle 이 Java 17 툴체인을 요구하는데, Gradle 은 <b>이미 설치된</b> JDK 중에서만
+ * 고를 수 있다. 개발 PC 에는 17 이 깔려 있어 통과하지만 배포 환경(Railway 컨테이너)에는
+ * 없어서 이렇게 끝난다.
+ *
+ *   Cannot find a Java installation on your machine (Linux ... ) matching:
+ *   {languageVersion=17, ...}. Toolchain download repositories have not been configured.
+ *
+ * 이 플러그인이 foojay Disco API 를 툴체인 저장소로 등록해, 맞는 JDK 가 없으면
+ * 빌드 중에 받아오게 한다. 이걸 빼는 대안(toolchain 제거)은 빌드 환경이 주는
+ * JDK 가 무엇이든 따라가게 되는데, Spring Boot 4 는 17 미만에서 아예 뜨지 않는다.
+ */
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
 rootProject.name = 'Back'

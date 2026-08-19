@@ -10,8 +10,10 @@ spring:
     import: optional:file:./application-local.yaml
 
 server:
-  # 기본 8080. 포트가 겹치면 SERVER_PORT 로 덮어쓴다.
-  port: ${SERVER_PORT:8080}
+  # PaaS(Railway·Render·Heroku 등)는 PORT 를 주입하고 그 포트로만 트래픽을 보낸다.
+  # 여기에 붙지 않으면 앱은 정상 기동하는데 헬스체크가 계속 실패한다.
+  # 로컬에서 포트가 겹칠 때는 SERVER_PORT 로 덮어쓴다.
+  port: ${PORT:${SERVER_PORT:8080}}
 
 logging:
   level:
@@ -43,12 +45,13 @@ mood-mirror:
       timeout-seconds: 4
 
   cors:
-    # Vite proxy 를 쓰면 동일 출처가 되어 실제로는 사용되지 않는다.
-    # 프론트를 다른 포트로 띄울 때를 대비해 몇 개 열어둔다.
-    allowed-origins:
-      - http://localhost:5173
-      - http://127.0.0.1:5173
-      - http://localhost:5174
-      - http://127.0.0.1:5174
+    # Vite proxy 를 쓰면 동일 출처가 되어 로컬에서는 사용되지 않는다.
+    #
+    # 배포에서 프론트를 백엔드와 다른 도메인에 올리면 여기에 그 출처를 넣어야 한다.
+    # 코드를 고치지 않고 CORS_ALLOWED_ORIGINS 환경변수로 덮어쓴다 (쉼표 구분).
+    #   예: CORS_ALLOWED_ORIGINS=https://mood-mirror.vercel.app
+    # 프론트를 같은 서버에서 서빙하면 동일 출처라 이 설정은 필요 없다.
+    allowed-origins: >-
+      ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174}
   session:
     ttl-minutes: 15

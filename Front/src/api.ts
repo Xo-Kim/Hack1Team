@@ -15,7 +15,19 @@ import type {
  * 미러 화면 컴포넌트에서 `staff.*` 를 부르는 코드가 생기면 그건 원칙 위반이다.
  */
 
-const BASE = '/api'
+/**
+ * API 기준 경로.
+ * <p>
+ * 기본값은 상대 경로다 — 로컬은 Vite 프록시가, 배포에서 프론트를 백엔드와 같은
+ * 서버에서 서빙하면 동일 출처가 받아준다. 둘 다 CORS 가 필요 없다.
+ * <p>
+ * 프론트를 다른 도메인에 올릴 때만 빌드 시점에 백엔드 주소를 박는다.
+ *   VITE_API_BASE=https://mood-mirror.up.railway.app/api npm run build
+ * 이 경우 백엔드의 CORS_ALLOWED_ORIGINS 에 프론트 출처를 넣어야 하고,
+ * <b>직원 화면(/api/staff/**)은 CORS 가 열려 있지 않다</b> — 추천을 고객 출처에서
+ * 부를 수 없게 한 설계라, 직원 화면은 백엔드와 같은 출처에서 띄워야 한다.
+ */
+const BASE = import.meta.env.VITE_API_BASE ?? '/api'
 
 class HttpError extends Error {
   // 생성자 파라미터 프로퍼티는 tsconfig 의 erasableSyntaxOnly 에 걸린다.
