@@ -1,18 +1,73 @@
 /* ============================================================
-   MCM Mood Mirror — 미러 화면 + STAFF VIEW
-   조명 연출의 핵심은 .mirror 의 filter 와 .light 레이어의 blend 다.
-   자세한 근거는 PRD §14.1 참고.
+   MCM Mood Mirror
+   디자인 가이드(MCM_디자인가이드.md) 토큰과 규칙을 그대로 옮긴 것.
+
+   한 문장 원칙: 화면의 90%는 흑백. 코냑과 황동은 나머지 10%에만.
    ============================================================ */
 
 :root {
-  --ink: #f4f1ec;
-  --ink-dim: #a8a49c;
-  --line: rgba(244, 241, 236, 0.14);
-  --cognac: #a4642a;
-  --panel-bg: #0d0d0f;
+  /* Base */
+  --mcm-white: #ffffff;
+  --mcm-onyx: #111111;
 
-  --serif: 'Georgia', 'Times New Roman', serif;
-  --sans: 'Pretendard', -apple-system, 'Segoe UI', 'Malgun Gothic', system-ui, sans-serif;
+  /* Signature — 코냑 가죽 */
+  --mcm-cognac: #8a5a2b;
+  --mcm-cognac-deep: #4e3018;
+
+  /* Metal trim — 무광 황동. 선과 점에만 쓴다 */
+  --mcm-brass: #a9834b;
+
+  /* Utility */
+  --mcm-ash: #6b6b6b;
+  --mcm-line: #e3e1de;
+
+  /* Mood — 서버 lighting 값이 런타임에 주입된다 */
+  --mood-primary: var(--mcm-cognac);
+  --mood-accent: var(--mcm-brass);
+  --mood-brightness: 0.78;
+
+  /* 서체 */
+  --font-display: 'Newsreader', 'Times New Roman', serif;
+  --font-body: 'Pretendard', -apple-system, 'Segoe UI', 'Malgun Gothic', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+
+  /* 스케일 */
+  --type-hero: clamp(2.5rem, 5vw, 4.5rem);
+  --type-h2: clamp(1.5rem, 2.5vw, 2.25rem);
+  --type-body: 1rem;
+
+  /*
+   * 거울 화면 전용 스케일.
+   *
+   * 여기서는 영상이 주인공이고 글자는 자막이다. hero(최대 72px)로 컨셉명을 쓰면
+   * 화면 절반이 글자가 되고, 그걸 읽히게 하려고 스크림을 깔면 정작 확인해야 할
+   * 조명 필터가 검정에 묻힌다. 그래서 거울 위에서는 한 단계씩 낮춘다.
+   */
+  --type-mirror-title: clamp(1.5rem, 2.2vw, 2rem);
+  --type-mirror-sub: 0.9375rem;
+  --type-caption: 0.8125rem;
+  --type-label: 0.6875rem;
+  --type-mono-data: 0.875rem;
+
+  /* 형태 — radius 는 0 또는 2px 뿐이다. pill 금지 */
+  --radius-none: 0;
+  --radius-sm: 2px;
+  --border-hair: 1px;
+  --border-action: 2px;
+
+  /* 여백 */
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 24px;
+  --space-lg: 48px;
+  --space-xl: 96px;
+
+  /* 모션 — 바운스·스프링·오버슛 금지 */
+  --ease-mcm: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 220ms;
+  --dur-base: 480ms;
+  --dur-slow: 720ms;
+  --dur-mood: 2400ms;
 }
 
 * {
@@ -27,749 +82,1196 @@ body,
 }
 
 body {
-  background: #08080a;
-  color: var(--ink);
-  font-family: var(--sans);
+  background: var(--mcm-white);
+  color: var(--mcm-onyx);
+  font-family: var(--font-body);
+  font-size: var(--type-body);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
 
-.app {
-  display: grid;
-  grid-template-columns: 1fr 380px;
-  height: 100%;
+/* 포커스 링은 황동 2px. outline:none 은 어떤 경우에도 쓰지 않는다. */
+:focus-visible {
+  outline: var(--border-action) solid var(--mcm-brass);
+  outline-offset: 2px;
 }
 
-@media (max-width: 1100px) {
-  .app {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
-    overflow: auto;
+/* 모든 변환을 opacity 로 대체한다. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
-/* ---------------------------------------------------------- 미러 스테이지 */
+/* ============================================================
+   시그니처 — 스터드 코너 마크
+   Stark 백팩 리벳에서 온 4px 황동 도트. 애니메이션도 설명도 없다.
+   이것 외의 장식은 두지 않는다. 직원 패널에는 쓰지 않는다.
+   ============================================================ */
 
+.stud::before {
+  content: '';
+  display: block;
+  width: 4px;
+  height: 4px;
+  background: var(--mcm-brass);
+}
+
+/* ============================================================
+   고객 미러 디스플레이
+   ============================================================ */
+
+.app {
+  height: 100%;
+  background: var(--mcm-onyx);
+}
+
+/*
+ * 높이를 명시해야 한다. .screen 이 inset:0 으로 붙는 기준 박스라서,
+ * 스테이지가 높이 0 이면 화면 전체가 무너진다.
+ */
 .stage {
   position: relative;
+  height: 100%;
   overflow: hidden;
-  background: #050506;
+  background: var(--mcm-onyx);
   isolation: isolate;
 }
 
 /*
-  거울처럼 좌우 반전. 분석용 캡처는 반전 전 원본을 쓰므로 결과에 영향이 없다.
-  filter 가 여기 걸려 있어서 화면 속 얼굴과 옷의 색이 실제로 변한다 — 이게
-  "배경색이 바뀌었다"와 "조명이 들어왔다"를 가르는 지점이다.
-*/
+ * 무드 필터 — 이 서비스의 색은 여기서만 나온다.
+ *
+ * AI 가 내려준 lighting 값이 런타임에 주입되므로 세션마다 달라진다.
+ * 브랜드 팔레트가 아니므로 코냑 10% 규칙은 이 영역에 적용되지 않는다.
+ * 대신 나머지 영역을 흑백으로 비워야 균형이 맞는다 — 필터 색과 브랜드
+ * 컬러가 한 화면에서 경쟁하면 둘 다 죽는다.
+ */
 .mirror {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transform: scaleX(-1);
-  filter: brightness(var(--video-brightness)) contrast(var(--video-contrast))
-    saturate(var(--video-saturate));
-  transition: filter var(--transition) cubic-bezier(0.4, 0, 0.2, 1);
+  transform: scaleX(-1); /* 거울이므로 좌우 반전 */
+  filter: saturate(var(--video-saturate, 1.1)) contrast(var(--video-contrast, 1.05))
+    brightness(var(--mood-brightness)) sepia(0.06);
+  transition: filter var(--dur-mood) var(--ease-mcm);
 }
 
 .light {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  transition: opacity var(--transition) cubic-bezier(0.4, 0, 0.2, 1),
-    background var(--transition) cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity var(--dur-mood) var(--ease-mcm),
+    background var(--dur-mood) var(--ease-mcm);
 }
 
-/* 넓게 깔리는 바탕 광. soft-light 라 인물의 명암을 뭉개지 않는다. */
+/*
+ * 바탕 광. soft-light 라 인물의 명암을 뭉개지 않는다.
+ * multiply 는 얼굴이 탁해지고 screen 은 날아간다 — 이 둘은 쓰지 않는다.
+ */
 .light--primary {
-  background: radial-gradient(120% 90% at 50% 55%, var(--primary) 0%, transparent 78%),
-    linear-gradient(180deg, var(--primary) 0%, transparent 45%, var(--primary) 100%);
+  background: var(--mood-primary);
   mix-blend-mode: soft-light;
-  opacity: var(--tint-primary-opacity);
+  opacity: var(--tint-primary-opacity, 0.4);
 }
 
-/* 위에서 떨어지는 포인트 광. overlay 라 색이 실제로 인물에 얹힌다. */
+/* 포인트 광. overlay 라 색이 실제로 인물에 얹힌다. */
 .light--accent {
-  background: radial-gradient(65% 55% at 50% 22%, var(--accent) 0%, transparent 72%);
+  background: radial-gradient(120% 80% at 50% 0%, var(--mood-accent), transparent 70%);
   mix-blend-mode: overlay;
-  opacity: var(--tint-accent-opacity);
+  opacity: var(--tint-accent-opacity, 0.28);
 }
 
 .light--sweep {
   background: conic-gradient(
-    from 0deg at 50% 45%,
+    from 0deg at 50% 50%,
     transparent 0deg,
-    var(--accent) 40deg,
-    transparent 110deg,
-    transparent 360deg
+    var(--mood-accent) 40deg,
+    transparent 90deg
   );
-  mix-blend-mode: overlay;
+  mix-blend-mode: soft-light;
   opacity: 0;
 }
 
+/*
+ * 비네트.
+ *
+ * 예전 값(45% 부터 검정 0.75)은 인물이 서는 자리까지 어둡게 눌러, AI 가 내려준
+ * 조명색이 실제로 얹혔는지 눈으로 확인할 수 없었다. 비네트는 가장자리를 정리하는
+ * 장치이지 밝기 조절기가 아니므로, 중앙을 넓게 비우고 최종 농도도 낮춘다.
+ */
 .vignette {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(115% 95% at 50% 45%, transparent 42%, rgba(0, 0, 0, 0.82) 100%);
+  background: radial-gradient(125% 95% at 50% 42%, transparent 62%, rgba(17, 17, 17, 0.46));
 }
 
 /* 필름 그레인. 디지털 화면 느낌을 깎아내 조명처럼 보이게 한다. */
 .grain {
   position: absolute;
-  inset: -50%;
+  inset: 0;
   pointer-events: none;
-  opacity: 0.22;
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
-  animation: grain-shift 1.4s steps(4) infinite;
+  opacity: 0.05;
+  background-image: repeating-conic-gradient(
+    rgba(255, 255, 255, 0.6) 0% 25%,
+    transparent 0% 50%
+  );
+  background-size: 3px 3px;
 }
 
-@keyframes grain-shift {
-  0% { transform: translate(0, 0); }
-  25% { transform: translate(-3%, 2%); }
-  50% { transform: translate(2%, -3%); }
-  75% { transform: translate(-2%, -2%); }
-  100% { transform: translate(0, 0); }
+/* breathe — ±0.05 로 6초 주기. 그 외 이펙트에서는 정적이다. */
+.fx-breathe .mirror {
+  animation: mood-breathe 6.5s ease-in-out infinite;
 }
 
-/* effect: breathe — 밝기가 아주 느리게 오르내린다. 정적인 화면을 살아있게 만든다. */
-.fx-breathe .light--primary {
-  animation: breathe 6.5s ease-in-out infinite;
+@keyframes mood-breathe {
+  0%,
+  100% {
+    filter: saturate(var(--video-saturate, 1.1)) contrast(var(--video-contrast, 1.05))
+      brightness(calc(var(--mood-brightness) - 0.05)) sepia(0.06);
+  }
+  50% {
+    filter: saturate(var(--video-saturate, 1.1)) contrast(var(--video-contrast, 1.05))
+      brightness(calc(var(--mood-brightness) + 0.05)) sepia(0.06);
+  }
 }
 
-@keyframes breathe {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.09); }
-}
-
-/* effect: sweep — 느린 원형 스윕. 강한 무드에서만 쓴다. */
 .fx-sweep .light--sweep {
-  opacity: calc(var(--tint-accent-opacity) * 0.55);
-  animation: sweep 14s linear infinite;
+  opacity: 0.16;
+  animation: sweep 22s linear infinite;
 }
 
 @keyframes sweep {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* 응대 모드: 조명은 그대로 두고 오버레이만 물러난다. 대화가 주인공이 된다. */
-.stage.is-serving .overlay--bottom {
-  opacity: 0.55;
+/* 응대 모드: 조명은 그대로 두고 화면 요소만 물러난다. 대화가 주인공이 된다. */
+.stage.is-serving .screen {
+  opacity: 0.6;
 }
 
-/* ---------------------------------------------------------- 오버레이 */
+/* ---------------------------------------------------------- 고객 화면 공통 */
 
-.overlay {
+.screen {
   position: absolute;
   inset: 0;
+  z-index: 3;
   display: flex;
   flex-direction: column;
-  padding: 4vmin;
-  pointer-events: none;
-  transition: opacity 600ms ease;
+  gap: var(--space-md);
+  padding: var(--space-xl) var(--space-lg);
+  color: var(--mcm-white);
+  animation: rise var(--dur-slow) var(--ease-mcm) both;
 }
 
-.overlay > * {
-  pointer-events: auto;
+@keyframes rise {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
-.overlay--center {
+.screen--center {
   align-items: center;
   justify-content: center;
   text-align: center;
-  gap: 18px;
+  gap: var(--space-lg);
 }
 
-.overlay--bottom {
+/*
+ * 아래쪽에만 붙는다. 거울은 위쪽이 주인공이다.
+ *
+ * 동적 색 위의 텍스트라 스크림 자체는 필수지만, <b>화면 전체를 덮으면 안 된다.</b>
+ * 예전에는 30% 지점부터 검정이 차올라 상반신까지 눌렀고, 그래서 조명 필터가
+ * 들어왔는지 확인할 수 없었다. 이제 글자가 실제로 놓이는 아래쪽 띠에만 깐다.
+ */
+.screen--bottom {
   justify-content: flex-end;
   align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-lg) var(--space-lg) var(--space-md);
+  background: linear-gradient(transparent 62%, rgba(17, 17, 17, 0.62) 84%, rgba(17, 17, 17, 0.9));
 }
 
-.eyebrow {
+/*
+ * 글자 구역을 좌하단 한 칸으로 묶는다. 가로로 끝까지 흐르면 시선이 화면을 훑고,
+ * 정작 거울이 배경으로 밀린다. 오른쪽 절반은 비워 둔다 — 거기 사람이 서 있다.
+ */
+.screen--bottom > * {
+  width: min(46ch, 62%);
+}
+
+/* 버튼은 내용 폭을 따른다. 폭을 강제하면 46ch 짜리 거대한 버튼이 된다. */
+.screen--bottom > .row,
+.screen--bottom > .btn {
+  width: auto;
+  max-width: 100%;
+}
+
+/* 읽어야 하는 화면(동의·권한)은 카메라 영상을 눌러 가독성을 확보한다. */
+.screen--sheet {
+  justify-content: center;
+  background: rgba(17, 17, 17, 0.92);
+}
+
+.screen--sheet > * {
+  width: min(760px, 100%);
+  margin-inline: auto;
+}
+
+/* ---------------------------------------------------------- 타이포 */
+
+/*
+ * 영문 헤드라인. 대문자로 변환하지 않는다 —
+ * MCM 로고가 이미 대문자 세 글자라 둘이 싸운다.
+ */
+.headline {
   margin: 0;
-  font-size: 11px;
-  letter-spacing: 0.34em;
-  text-transform: uppercase;
-  color: var(--ink-dim);
+  font-family: var(--font-display);
+  font-size: var(--type-hero);
+  font-variation-settings: 'opsz' 72;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 1.1;
+  text-transform: none;
 }
 
-.eyebrow--warn {
-  color: var(--cognac);
-}
-
-.display {
+/* 한글 제목 — 세리프를 쓰지 않는다. 굵기는 500 을 넘기지 않는다. */
+.title {
   margin: 0;
-  font-family: var(--serif);
-  font-weight: 400;
-  font-size: clamp(34px, 5.2vw, 64px);
-  letter-spacing: 0.01em;
-  text-shadow: 0 2px 30px rgba(0, 0, 0, 0.6);
+  font-family: var(--font-body);
+  font-size: var(--type-h2);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
 }
 
-.display--sm {
-  font-size: clamp(28px, 3.4vw, 46px);
-}
-
-.lede {
+.lead {
   margin: 0;
-  font-size: 15px;
-  color: var(--ink-dim);
-  letter-spacing: 0.02em;
-}
-
-.consent {
-  margin: 6px 0 0;
-  font-size: 11px;
+  font-size: var(--type-body);
   line-height: 1.7;
-  color: rgba(168, 164, 156, 0.72);
-  letter-spacing: 0.02em;
 }
 
-.btn {
-  font-family: inherit;
-  font-size: 13px;
-  letter-spacing: 0.16em;
+.muted {
+  margin: 0;
+  font-size: var(--type-caption);
+  line-height: 1.6;
+  color: var(--mcm-ash);
+}
+
+.screen .muted {
+  color: rgba(255, 255, 255, 0.66);
+}
+
+/* 대문자 라벨 — 반드시 벌린다. 큰 글자는 조이고 작은 대문자는 벌린다. */
+.label {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--type-label);
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
   text-transform: uppercase;
-  padding: 15px 34px;
-  border-radius: 2px;
+}
+
+/* 데이터 — 세션ID·시각·경과시간에만. 장식으로 쓰면 각인의 의미가 사라진다. */
+.data {
+  font-family: var(--font-mono);
+  font-size: var(--type-mono-data);
+  letter-spacing: 0;
+}
+
+/* ---------------------------------------------------------- 버튼 */
+
+/*
+ * 버튼은 기본 상태부터 2px 로 둔다. 호버 때만 두꺼워지면 레이아웃이 밀려
+ * 버튼이 떨린다. 1px 황동은 흰 배경에서 대비 3.4:1 이라 거의 보이지 않는다.
+ */
+.btn {
+  padding: 18px 40px;
+  border: var(--border-action) solid var(--mcm-onyx);
+  border-radius: var(--radius-none);
+  background: transparent;
+  color: var(--mcm-onyx);
+  font-family: var(--font-body);
+  font-size: var(--type-body);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: background 220ms ease, border-color 220ms ease, color 220ms ease;
+  transition: border-color var(--dur-base) var(--ease-mcm),
+    background var(--dur-base) var(--ease-mcm), color var(--dur-base) var(--ease-mcm);
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--mcm-brass);
 }
 
 .btn:disabled {
-  opacity: 0.45;
-  cursor: default;
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
+/* Primary — 오닉스 배경, 호버 시 배경만 코냑 */
 .btn--primary {
-  background: var(--ink);
-  color: #0b0b0d;
-  border: 1px solid var(--ink);
+  background: var(--mcm-onyx);
+  border-color: var(--mcm-onyx);
+  color: var(--mcm-white);
 }
 
-.btn--primary:not(:disabled):hover {
-  background: var(--cognac);
-  border-color: var(--cognac);
-  color: var(--ink);
+.btn--primary:hover:not(:disabled) {
+  background: var(--mcm-cognac);
+  border-color: var(--mcm-cognac);
 }
 
-.btn--ghost {
-  background: rgba(10, 10, 12, 0.42);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  backdrop-filter: blur(10px);
-  padding: 11px 22px;
+/* 어두운 미러 화면 위에서는 색을 뒤집는다. */
+.screen .btn {
+  border-color: var(--mcm-white);
+  color: var(--mcm-white);
 }
 
-.btn--ghost:hover {
-  border-color: var(--cognac);
+.screen .btn--primary {
+  background: var(--mcm-white);
+  border-color: var(--mcm-white);
+  color: var(--mcm-onyx);
 }
 
-.notice {
-  max-width: 420px;
-  padding: 18px 22px;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: rgba(10, 10, 12, 0.6);
-  backdrop-filter: blur(10px);
+.screen .btn--primary:hover:not(:disabled) {
+  background: var(--mcm-cognac);
+  border-color: var(--mcm-cognac);
+  color: var(--mcm-white);
+}
+
+.btn--sm {
+  padding: 12px 24px;
+  font-size: var(--type-caption);
+}
+
+/* 거울 아래 버튼 줄. 조작부가 화면을 차지하면 거울이 아니라 키오스크가 된다. */
+.screen--bottom .btn {
+  padding: 13px 28px;
+  font-size: var(--type-caption);
+}
+
+.screen--bottom .btn--sm {
+  padding: 11px 20px;
+}
+
+.screen--bottom .credit {
+  font-size: var(--type-label);
+}
+
+.row {
   display: flex;
-  flex-direction: column;
-  gap: 14px;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
   align-items: center;
 }
 
-.notice--error {
-  border-color: rgba(190, 70, 70, 0.5);
+.row--end {
+  justify-content: flex-end;
 }
 
-.notice p {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--ink-dim);
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
 }
 
-/* ---------------------------------------------------------- 카운트다운 / 분석 */
+.stack--tight {
+  gap: var(--space-sm);
+}
 
-.countdown {
-  font-family: var(--serif);
-  font-size: clamp(90px, 16vw, 190px);
+/* ---------------------------------------------------------- 고객 화면 요소 */
+
+.brandmark {
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 7vw, 5.5rem);
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  padding-left: 0.24em;
   line-height: 1;
-  animation: count-pop 1s ease-out;
 }
 
-@keyframes count-pop {
-  0% { opacity: 0; transform: scale(1.35); }
-  22% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0.25; transform: scale(0.94); }
+/* 카드 — 1px 헤어라인. 깊이는 그림자가 아니라 여백과 선으로 만든다. */
+.note {
+  padding: var(--space-md);
+  border: var(--border-hair) solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--radius-sm);
 }
 
-.pulse {
-  width: 66px;
-  height: 66px;
-  border-radius: 50%;
-  border: 1px solid var(--line);
-  border-top-color: var(--cognac);
-  animation: spin 1.5s linear infinite;
+.note h3 {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--type-body);
+  font-weight: 500;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.note p {
+  margin: 0;
+  font-size: var(--type-caption);
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.66);
 }
 
+/* 코냑 색면은 한 화면에 1개소. 여기서는 헤어라인으로만 쓴다. */
+.note--accent {
+  border-color: var(--mcm-brass);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--type-body);
+  cursor: pointer;
+}
+
+/* 체크박스 16×16, radius 2px, 미체크 시 헤어라인 / 체크 시 채움 */
+.check input {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: var(--border-hair) solid rgba(255, 255, 255, 0.45);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-mcm);
+}
+
+.check input:checked {
+  background: var(--mcm-white);
+}
+
+.countdown__num {
+  font-family: var(--font-display);
+  font-size: clamp(6rem, 16vw, 12rem);
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 1;
+  animation: countdown-fade 1s var(--ease-mcm) both;
+}
+
+@keyframes countdown-fade {
+  from {
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.2;
+  }
+}
+
+/* 진행 표시 — 채도 있는 바가 아니라 헤어라인. 퍼센트는 표시하지 않는다. */
 .steps {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--space-sm);
+  font-size: var(--type-body);
 }
 
-.step {
-  font-size: 13px;
-  letter-spacing: 0.08em;
-  color: rgba(168, 164, 156, 0.32);
-  transition: color 400ms ease;
+.steps li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: rgba(255, 255, 255, 0.4);
+  transition: color var(--dur-base) var(--ease-mcm);
 }
 
-.step--active {
-  color: var(--ink);
+.steps li.is-active {
+  color: var(--mcm-white);
 }
 
-.step--done {
-  color: rgba(168, 164, 156, 0.66);
+/* 체크마크 이모지 대신 스터드 도트. */
+.steps li::before {
+  content: '';
+  flex: none;
+  width: 4px;
+  height: 4px;
+  background: transparent;
+  transition: background var(--dur-base) var(--ease-mcm);
 }
 
-.step--done::after {
-  content: ' ·';
-  color: var(--cognac);
+.steps li.is-active::before {
+  background: var(--mcm-brass);
 }
 
-/* ---------------------------------------------------------- 컨셉 카드 */
+.progress {
+  width: min(360px, 100%);
+  height: 1px;
+  background: rgba(255, 255, 255, 0.22);
+  overflow: hidden;
+}
 
+.progress__bar {
+  display: block;
+  height: 1px;
+  background: var(--mcm-white);
+  animation: progress 12s linear both;
+}
+
+@keyframes progress {
+  from {
+    width: 4%;
+  }
+  to {
+    width: 92%;
+  }
+}
+
+/* 영문 컨셉명 — 세리프의 자리. opsz 는 실제 크기에 맞춘다. */
 .concept {
-  max-width: 520px;
-  padding: 26px 30px 24px;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: linear-gradient(180deg, rgba(8, 8, 10, 0.34), rgba(8, 8, 10, 0.72));
-  backdrop-filter: blur(16px);
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-mirror-title);
+  font-variation-settings: 'opsz' 32;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+/* 거울 위 본문. 자막 크기로 내린다. */
+.screen--bottom .title {
+  font-size: var(--type-mirror-title);
+}
+
+.screen--bottom .lead {
+  font-size: var(--type-mirror-sub);
+  line-height: 1.6;
+}
+
+/*
+ * 연출 요약. 위아래 선으로 화면을 가로지르던 띠였는데, 그 선 두 줄이
+ * 거울을 상하로 잘라 놓았다. 왼쪽 세로선 하나로 줄인다.
+ */
+.facts {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  padding: 2px 0 2px var(--space-sm);
+  border-left: var(--border-hair) solid rgba(255, 255, 255, 0.3);
+}
+
+.fact {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  animation: rise 900ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  gap: 2px;
 }
 
-@keyframes rise {
-  from { opacity: 0; transform: translateY(26px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.comment {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--ink-dim);
-}
-
-.palette {
+.fact__value {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--type-mirror-sub);
 }
 
-.chip {
+/*
+ * 조명 스와치.
+ *
+ * 화면에 얹힌 색과 서버가 내려준 색을 나란히 두면, 필터가 실제로 동작하는지
+ * 한눈에 대조된다. 이게 없으면 "조명: Berlin Blue Hour" 라는 글자만 있고
+ * 그 색이 영상에 걸렸는지 확인할 방법이 없다.
+ */
+.fact__chips {
   display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-dim);
-  padding: 5px 11px 5px 7px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
+  gap: 3px;
 }
 
-.chip--sm {
-  font-size: 10px;
-  padding: 3px 9px 3px 5px;
+.fact__chip {
+  width: 14px;
+  height: 14px;
+  border: var(--border-hair) solid rgba(255, 255, 255, 0.4);
+  border-radius: var(--radius-none);
 }
 
-.chip__dot {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
-}
-
-.meta {
-  display: flex;
-  gap: 26px;
-  margin: 2px 0 0;
-  flex-wrap: wrap;
-}
-
-.meta dt {
-  font-size: 10px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: rgba(168, 164, 156, 0.55);
-  margin-bottom: 4px;
-}
-
-.meta dd {
+/* CC 라이선스의 저작자 표시는 준수 요건이다. 장식이 아니므로 지우지 말 것. */
+.credit {
   margin: 0;
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
+  font-size: var(--type-caption);
+  color: rgba(255, 255, 255, 0.66);
 }
 
-/* AI 결과인지 폴백인지 한눈에 구분하는 배지 */
-.concept__head {
+.credit a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.credit a:hover {
+  color: var(--mcm-white);
+}
+
+/*
+ * 응대 선택. 두 버튼은 반드시 같은 크기·같은 위계다.
+ * 거절할 수 있어야 수락이 진심이 된다 — 한쪽을 강조하면 전략이 깨진다.
+ */
+.choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+  width: min(820px, 100%);
+}
+
+.choice {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-lg) var(--space-md);
+  border: var(--border-action) solid var(--mcm-white);
+  border-radius: var(--radius-none);
+  background: transparent;
+  color: var(--mcm-white);
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: border-color var(--dur-base) var(--ease-mcm);
 }
 
-.srcbadge {
-  font-size: 9.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  padding: 4px 9px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  white-space: nowrap;
+.choice:hover {
+  border-color: var(--mcm-brass);
 }
 
-.srcbadge--ai {
-  border-color: rgba(76, 175, 125, 0.5);
-  color: #6fc79a;
+/* 버튼 안의 글자다. 제목 크기로 두면 선택지가 아니라 표지판이 된다. */
+.choice__title {
+  font-size: var(--type-mirror-title);
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
-.srcbadge--fallback {
-  border-color: rgba(164, 100, 42, 0.55);
-  color: var(--cognac);
+.choice__desc {
+  font-size: var(--type-caption);
+  color: rgba(255, 255, 255, 0.66);
 }
 
-.staff__source {
-  margin: 0;
-}
-
-/* 재생 중인 곡. CC 저작자 표시 요건이라 눈에 보여야 한다. */
-.track {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 2px 0 0;
-  font-size: 11.5px;
-  color: var(--ink-dim);
-  flex-wrap: wrap;
-}
-
-.track__note {
-  color: var(--cognac);
-}
-
-.track--muted {
-  color: rgba(217, 112, 112, 0.9);
-}
-
-.btn--tiny {
-  font-size: 10px;
-  padding: 5px 11px;
-  letter-spacing: 0.1em;
-}
-
-.track a {
-  color: var(--ink-dim);
-  text-decoration: none;
-  border-bottom: 1px solid var(--line);
-}
-
-.track a:hover {
-  color: var(--cognac);
-  border-bottom-color: var(--cognac);
-}
-
-.track__src {
-  font-size: 9.5px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  padding: 2px 7px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  opacity: 0.65;
-}
-
-.track__src--ai {
-  border-color: rgba(76, 175, 125, 0.5);
-  color: #6fc79a;
-  opacity: 1;
-}
-
-.track__reason {
-  margin: -4px 0 0 18px;
-  font-size: 11px;
-  line-height: 1.5;
-  color: rgba(168, 164, 156, 0.7);
-}
-
-.actions {
-  display: flex;
-  gap: 9px;
-  margin-top: 6px;
-  flex-wrap: wrap;
-}
-
-.btn--ghost.is-muted {
-  border-color: var(--cognac);
-  color: var(--cognac);
+@media (max-width: 760px) {
+  .choices {
+    grid-template-columns: 1fr;
+  }
+  .screen {
+    padding: var(--space-lg) var(--space-md);
+  }
 }
 
 /* ---------------------------------------------------------- 상태바 */
 
 .statusbar {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  top: var(--space-md);
+  left: var(--space-md);
+  right: var(--space-md);
+  z-index: 4;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  color: rgba(168, 164, 156, 0.62);
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.45), transparent);
-  pointer-events: none;
+  gap: var(--space-xs);
+  color: rgba(255, 255, 255, 0.55);
 }
 
+/* 상태는 색이 아니라 텍스트로 구분한다. 도트는 황동 점 하나로 통일. */
 .statusbar__dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #6b6b72;
+  width: 4px;
+  height: 4px;
+  background: var(--mcm-brass);
 }
 
-.statusbar__dot[data-mode='live'] {
-  background: #4caf7d;
-}
-
-.statusbar__dot[data-mode='mock'] {
-  background: var(--cognac);
+.statusbar__dot[data-mode='offline'] {
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .statusbar__session {
   margin-left: auto;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.6;
 }
 
-/* ---------------------------------------------------------- STAFF VIEW */
+/* ============================================================
+   직원 단말 (/staff)
+   밝은 환경의 태블릿에서 본다. 조명 연출도 모노그램도 장식도 없다.
+   고객 화면이 여백으로 럭셔리를 만든다면 여기는 밀도로 효율을 만든다.
+   ============================================================ */
 
 .staff {
-  background: var(--panel-bg);
-  border-left: 1px solid var(--line);
-  padding: 20px 20px 40px;
-  overflow-y: auto;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  overflow: hidden;
+  background: var(--mcm-white);
+  color: var(--mcm-onyx);
 }
 
-.staff__head {
+.staff__header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: var(--border-hair) solid var(--mcm-line);
+  flex-wrap: wrap;
 }
 
-.staff__title {
-  margin: 6px 0 0;
-  font-family: var(--serif);
-  font-weight: 400;
-  font-size: 21px;
+.staff__header h1 {
+  margin: 0;
+  font-size: var(--type-body);
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
-.badge {
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+/* 단말 식별자. 읽을 일은 거의 없고 두 대를 구분할 때만 본다. */
+.staff__id {
+  margin-left: auto;
+  color: var(--mcm-ash);
+  font-family: var(--font-mono);
+}
+
+/* 연결이 끊긴 것을 숨기면 직원은 요청이 없는 것으로 오해한다. */
+.conn {
   padding: 5px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
+  border: var(--border-hair) solid var(--mcm-line);
+  border-radius: var(--radius-sm);
+  color: var(--mcm-ash);
 }
 
-.badge--live {
-  border-color: var(--cognac);
-  color: var(--cognac);
+.conn--polling {
+  border-color: var(--mcm-brass);
+  color: var(--mcm-onyx);
 }
 
-.staff__disclaimer {
+.staff__error {
   margin: 0;
-  padding: 10px 12px;
-  font-size: 10.5px;
-  line-height: 1.6;
-  color: rgba(164, 100, 42, 0.92);
-  border: 1px dashed rgba(164, 100, 42, 0.42);
-  border-radius: 3px;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: var(--border-hair) solid var(--mcm-line);
+  border-left: var(--border-action) solid var(--mcm-cognac);
+  font-size: var(--type-caption);
 }
 
-.staff__block {
-  border-top: 1px solid var(--line);
-  padding-top: 15px;
+.staff__body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  min-height: 0;
+}
+
+@media (max-width: 900px) {
+  .staff__body {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+}
+
+.panel {
+  padding: var(--space-md);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.panel h2 {
+  margin: 0 0 var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: var(--type-label);
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mcm-ash);
+}
+
+.panel--list {
+  border-right: var(--border-hair) solid var(--mcm-line);
+}
+
+/* 빈 상태 — 상황 한 줄 + 다음 행동. 일러스트도 아이콘도 사과도 없다. */
+.panel--empty {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--space-sm);
+  justify-content: center;
+  align-items: flex-start;
+  max-width: 520px;
 }
 
-.staff__label {
-  margin: 0;
-  font-size: 10px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: rgba(168, 164, 156, 0.55);
+.panel--empty h2 {
+  font-family: var(--font-body);
+  font-size: var(--type-h2);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--mcm-onyx);
 }
 
-.staff__mood {
-  margin: 0;
-  font-family: var(--serif);
-  font-size: 17px;
+.toast {
+  position: fixed;
+  right: var(--space-md);
+  bottom: var(--space-md);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-sm) var(--space-md);
+  border: var(--border-action) solid var(--mcm-onyx);
+  border-radius: var(--radius-sm);
+  background: var(--mcm-white);
+  color: var(--mcm-onyx);
+  font-family: var(--font-body);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur-base) var(--ease-mcm);
 }
 
-.staff__tags,
-.staff__styling,
-.staff__note,
-.staff__empty,
-.staff__stock {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.65;
-  color: var(--ink-dim);
+.toast:hover {
+  border-color: var(--mcm-brass);
 }
 
-.staff__note {
-  color: var(--cognac);
-  font-size: 11px;
+.toast strong {
+  font-size: var(--type-body);
+  font-weight: 500;
 }
 
-.staff__empty--error {
-  color: #d97070;
+.toast span {
+  font-size: var(--type-caption);
+  color: var(--mcm-ash);
 }
 
-.staff__stock {
-  font-size: 10.5px;
-  opacity: 0.6;
-  border-top: 1px solid var(--line);
-  padding-top: 12px;
+.toast__cta {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: var(--mcm-onyx) !important;
 }
 
-.rec {
+/* ---- 세션 목록 ---- */
+
+.sessions {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 11px;
+  gap: var(--space-xs);
 }
 
-.rec__item {
-  display: grid;
-  grid-template-columns: 16px 72px 1fr;
-  gap: 9px;
-  align-items: start;
-}
-
-.rec__rank {
-  font-family: var(--serif);
-  font-size: 15px;
-  color: var(--cognac);
-  line-height: 1.3;
-}
-
-/* 제품 사진. MCM 이미지 CDN 은 흰 배경이라 살짝 어둡게 눌러 패널 톤에 맞춘다. */
-.thumb {
-  width: 72px;
-  height: 84px;
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  overflow: hidden;
-  background: #16161a;
-  display: flex;
-}
-
-.thumb img {
+.session {
   width: 100%;
-  height: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px var(--space-xs);
+  padding: var(--space-sm);
+  border: var(--border-hair) solid var(--mcm-line);
+  border-radius: var(--radius-sm);
+  background: var(--mcm-white);
+  color: var(--mcm-onyx);
+  font-family: var(--font-body);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-mcm);
+}
+
+.session:hover {
+  border-color: var(--mcm-ash);
+}
+
+.session.is-open {
+  border-color: var(--mcm-onyx);
+}
+
+/* 대기 중인 요청은 코냑 헤어라인 하나로 구분한다. 색면으로 만들지 않는다. */
+.session.is-waiting {
+  border-left: var(--border-action) solid var(--mcm-cognac);
+}
+
+.session__mirror {
+  font-size: var(--type-body);
+  font-weight: 500;
+}
+
+.session__concept {
+  grid-column: 1 / -1;
+  font-family: var(--font-display);
+  font-size: var(--type-caption);
+  color: var(--mcm-ash);
+}
+
+/* 배지 — 사각, 1px 보더, 배경 없음, 모노 라벨. 색으로 상태를 구분하지 않는다. */
+.chip {
+  justify-self: end;
+  padding: 3px 8px;
+  border: var(--border-hair) solid var(--mcm-line);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--type-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mcm-ash);
+}
+
+.chip--assist_requested {
+  border-color: var(--mcm-onyx);
+  color: var(--mcm-onyx);
+}
+
+.wait,
+.lock {
+  grid-column: 1 / -1;
+  font-family: var(--font-mono);
+  font-size: var(--type-label);
+  letter-spacing: 0.06em;
+  color: var(--mcm-ash);
+}
+
+.wait--over {
+  color: var(--mcm-onyx);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.lock--mine {
+  color: var(--mcm-onyx);
+}
+
+/* ---- 응대 카드 ---- */
+
+.panel--card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.panel--card.is-loading {
+  opacity: 0.5;
+}
+
+.card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.card__head h2 {
+  margin: 0 0 4px;
+  font-family: var(--font-body);
+  font-size: var(--type-h2);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--mcm-onyx);
+}
+
+.card__actions {
+  display: flex;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  padding-bottom: var(--space-md);
+  border-bottom: var(--border-hair) solid var(--mcm-line);
+}
+
+.card__mood h3,
+.card__recs h3 {
+  margin: 0 0 var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: var(--type-label);
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mcm-ash);
+}
+
+.card__concept {
+  margin: 0 0 var(--space-sm);
+  font-family: var(--font-display);
+  font-size: var(--type-h2);
+  font-variation-settings: 'opsz' 40;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+
+.kv {
+  display: flex;
+  gap: var(--space-md);
+  margin: 0 0 var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.kv dt {
+  margin-bottom: 4px;
+  font-family: var(--font-mono);
+  font-size: var(--type-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mcm-ash);
+}
+
+.kv dd {
+  margin: 0;
+  font-size: var(--type-body);
+}
+
+.palette {
+  display: flex;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+/* 제품 색상은 카탈로그 데이터다. 브랜드 팔레트가 아니므로 면적 규칙 밖이다. */
+.palette__dot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 4px 10px 4px 4px;
+  border: var(--border-hair) solid var(--mcm-line);
+  border-radius: var(--radius-sm);
+  background: transparent !important;
+}
+
+.palette__dot::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-sm);
+  background: inherit;
+  box-shadow: none;
+  border: var(--border-hair) solid var(--mcm-line);
+}
+
+.palette__dot span {
+  font-family: var(--font-mono);
+  font-size: var(--type-label);
+  letter-spacing: 0.06em;
+  color: var(--mcm-ash);
+}
+
+.card__recs-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  justify-content: space-between;
+}
+
+.styling {
+  margin: 0 0 var(--space-sm);
+  padding: var(--space-sm);
+  border-left: var(--border-hair) solid var(--mcm-line);
+  font-size: var(--type-caption);
+  line-height: 1.7;
+}
+
+.alert {
+  margin: 0;
+  padding: var(--space-sm);
+  border-left: var(--border-action) solid var(--mcm-cognac);
+  font-size: var(--type-caption);
+  line-height: 1.6;
+}
+
+.alert--soft {
+  border-left-color: var(--mcm-line);
+  color: var(--mcm-ash);
+}
+
+.screen .alert {
+  border-left-color: var(--mcm-brass);
+}
+
+.reccat {
+  margin-bottom: var(--space-md);
+}
+
+.reccat h4 {
+  margin: 0 0 var(--space-xs);
+  font-family: var(--font-mono);
+  font-size: var(--type-label);
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mcm-ash);
+}
+
+.items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-xs);
+}
+
+.item {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-xs);
+  border: var(--border-hair) solid var(--mcm-line);
+  border-radius: var(--radius-sm);
+}
+
+/*
+ * 제품 이미지는 4:5 로 고정. 비율이 3종 이상 섞이면 감각이 먼저 무너진다.
+ * flex 기본 stretch 가 높이를 늘려 비율을 깨뜨리므로 둘 다 막는다.
+ */
+.item__img {
+  flex: none;
+  align-self: flex-start;
+  width: 56px;
+  height: 70px;
+  aspect-ratio: 4 / 5;
   object-fit: cover;
-  filter: brightness(0.94) contrast(1.03);
+  border-radius: var(--radius-sm);
+  background: var(--mcm-line);
 }
 
-/* 이미지 실패 시 컬러 스와치로 대체 — 빈 사각형보다 정보가 있다. */
-.thumb--empty i {
-  flex: 1;
-}
-
-.rec__body {
+.item__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   min-width: 0;
 }
 
-.rec__name {
-  display: block;
-  margin: 0 0 3px;
-  font-size: 12.5px;
+.item__name {
+  font-size: var(--type-caption);
+  font-weight: 500;
   line-height: 1.4;
-  color: var(--ink);
-  text-decoration: none;
 }
 
-a.rec__name:hover {
-  color: var(--cognac);
-  text-decoration: underline;
-  text-underline-offset: 2px;
+/* 순위는 데이터다. */
+.item__name b {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  margin-right: 6px;
+  color: var(--mcm-ash);
 }
 
-.rec__price {
-  margin: 0 0 5px;
-  font-family: var(--serif);
-  font-size: 14px;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
+.item__meta {
+  font-family: var(--font-mono);
+  font-size: var(--type-label);
+  color: var(--mcm-ash);
 }
 
-.rec__reason {
-  margin: 0 0 5px;
-  font-size: 11.5px;
-  line-height: 1.55;
-  color: var(--ink-dim);
-}
-
-.rec__meta,
-.rec__loc {
-  margin: 0;
-  font-size: 10.5px;
+.item__reason {
+  font-size: var(--type-caption);
   line-height: 1.5;
-  color: rgba(168, 164, 156, 0.5);
+  color: var(--mcm-ash);
 }
 
-.rec__loc {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.tiny {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--type-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mcm-ash);
 }
 
-.rec__colors {
-  display: inline-flex;
-  gap: 4px;
-}
-
-.rec__colors .chip__dot {
-  width: 9px;
-  height: 9px;
+.screen .tiny {
+  color: rgba(255, 255, 255, 0.55);
 }
