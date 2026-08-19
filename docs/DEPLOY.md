@@ -4,6 +4,24 @@
 
 ---
 
+## 0. `Unsupported Gradle version: 9`
+
+```
+using build driver nixpacks-v1.41.0
+Error: Unsupported Gradle version: 9
+nixpacks exited with an error
+```
+
+**빌더를 코드에서 강제하지 않는다.** `railway.json` 에 `"builder": "NIXPACKS"` 를 적으면
+서비스 기본값(Railpack)을 덮어써서 더 오래된 빌더가 쓰인다. nixpacks 는 Gradle 9 를
+모른다. 그 줄을 빼면 서비스 설정을 따라간다.
+
+그리고 래퍼를 **Gradle 8.14.3** 으로 맞춰 두었다. Spring Boot 4.1 은 8.14 에서 그대로
+빌드되고, 이 버전은 두 빌더가 모두 안다. 래퍼를 올릴 때는 배포 빌더가 그 버전을
+지원하는지 먼저 확인할 것.
+
+---
+
 ## 1. 빌드가 툴체인에서 실패하는 경우
 
 ```
