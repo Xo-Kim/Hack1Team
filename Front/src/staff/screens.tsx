@@ -256,6 +256,21 @@ export function AssistCard({
           <span className="tiny">검증된 제품만</span>
         </div>
 
+        {/*
+          랭킹은 실측 5초다. 카드 전체를 이것에 묶어 두면 직원이 걸어가는 동안
+          빈 화면을 본다. 무드·팔레트는 이미 위에 떠 있으므로 여기만 기다린다.
+        */}
+        {!card.recommendationsReady && (
+          <div className="recs-pending">
+            <span className="progress">
+              <span className="progress__bar" />
+            </span>
+            <p className="muted">
+              추천을 고르는 중입니다. 무드와 팔레트는 위에서 먼저 확인하세요.
+            </p>
+          </div>
+        )}
+
         {card.recommendationFallback && (
           <p className="alert alert--soft">
             규칙 기반으로 선정된 목록입니다. 추천 이유가 템플릿 문장이므로 그대로 읽지

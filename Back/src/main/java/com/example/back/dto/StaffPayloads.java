@@ -53,6 +53,10 @@ public final class StaffPayloads {
      * @param styleComment           고객 화면에도 보이는 연출 문구. 대화를 열 때 쓴다
      * @param recommendationFallback LLM 랭킹이 실패해 프리필터 점수로 대체됐는지.
      *                               true 면 추천 이유가 템플릿 문장이므로 직원이 그대로 읽으면 안 된다
+     * @param recommendationsReady   추천 계산이 끝났는지. <b>false 면 {@code recommendations}
+     *                               가 비어 있고, 잠시 뒤 다시 조회하면 채워진다.</b> 랭킹은 실측
+     *                               5초라 이걸 기다렸다 카드를 내려주면 직원이 그동안 빈 화면을
+     *                               본다. 무드·팔레트는 걸어가면서 바로 필요한 정보라 먼저 보낸다
      */
     public record StaffCard(
             String sessionId,
@@ -71,6 +75,7 @@ public final class StaffPayloads {
             String stylingNote,
             boolean analysisFallback,
             boolean recommendationFallback,
+            boolean recommendationsReady,
             String note,
             String assignedStaffId
     ) {

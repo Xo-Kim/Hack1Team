@@ -638,6 +638,28 @@ body {
   }
 }
 
+/*
+ * 추천 계산 대기.
+ * <p>
+ * 직원 화면은 흰 바탕이라 거울용 progress(흰 선)가 보이지 않는다. 여기서만 뒤집는다.
+ * 스피너를 쓰지 않는 것은 가이드 규칙이다 — 진행은 선으로 표현한다.
+ */
+.recs-pending {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm) 0;
+}
+
+.recs-pending .progress {
+  background: var(--mcm-line);
+}
+
+.recs-pending .progress__bar {
+  background: var(--mcm-brass);
+  animation-duration: 6s;
+}
+
 /* 영문 컨셉명 — 세리프의 자리. opsz 는 실제 크기에 맞춘다. */
 .concept {
   margin: 0;

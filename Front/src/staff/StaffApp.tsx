@@ -80,6 +80,23 @@ export function StaffApp() {
     return () => window.clearTimeout(timer)
   }, [toast])
 
+  /**
+   * 추천이 아직 계산 중이면 짧게 다시 조회한다.
+   * <p>
+   * 카드는 무드·팔레트만으로 먼저 뜨고 추천은 뒤따라 붙는다. 서버가 요청 시점에
+   * 계산을 다시 걸어주므로, 이 폴링은 대기일 뿐 아니라 예열이 실패했을 때의
+   * 재시도이기도 하다.
+   */
+  useEffect(() => {
+    if (!card || card.recommendationsReady || !openId) return
+    const timer = window.setTimeout(() => {
+      staff.card(openId).then(setCard).catch(() => {
+        /* 다음 주기가 다시 시도한다 */
+      })
+    }, 1200)
+    return () => window.clearTimeout(timer)
+  }, [card, openId])
+
   // ---------------------------------------------------------------- 카드
 
   const openCard = useCallback(async (id: string) => {

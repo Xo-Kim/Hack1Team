@@ -160,6 +160,11 @@ export interface StaffCard {
   analysisFallback: boolean
   /** true 면 LLM 랭킹 실패 — 추천 이유가 템플릿이라 그대로 읽으면 안 된다. */
   recommendationFallback: boolean
+  /**
+   * 추천 계산이 끝났는지. false 면 `recommendations` 가 비어 있고, 잠시 뒤 다시
+   * 조회하면 채워진다. 랭킹이 실측 5초라 카드는 이걸 기다리지 않고 먼저 뜬다.
+   */
+  recommendationsReady: boolean
   note: string | null
   assignedStaffId: string | null
 }

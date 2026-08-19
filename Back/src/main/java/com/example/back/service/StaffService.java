@@ -11,6 +11,8 @@ import com.example.back.dto.StaffPayloads.StaffCard;
 import com.example.back.dto.StaffPayloads.StaffSessionSummary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -18,6 +20,7 @@ import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -45,6 +48,14 @@ public class StaffService {
      * 어차피 바뀔 이유가 없으므로 세션당 한 번만 계산한다.
      */
     private final Map<String, RecommendResponse> recommendationCache = new ConcurrentHashMap<>();
+
+    /**
+     * 계산이 진행 중인 세션. 중복 실행을 막는다.
+     * <p>
+     * 직원 화면이 추천을 기다리며 폴링하고 직원이 여럿 붙을 수도 있어서, 막지 않으면
+     * 같은 세션에 대해 랭킹이 여러 번 돈다. 분당 3회 한도를 혼자 다 쓰게 된다.
+     */
+    private final Set<String> computing = ConcurrentHashMap.newKeySet();
 
     public StaffService(SessionStore sessions, MirrorService mirror, Clock clock) {
         this.sessions = sessions;
@@ -174,7 +185,10 @@ public class StaffService {
     private StaffCard toCard(Session session) {
         MoodAnalysis analysis = session.analysis().orElse(null);
         Outfit outfit = analysis == null ? null : analysis.outfit();
-        RecommendResponse rec = recommendations(session);
+        RecommendResponse rec = cachedRecommendations(session);
+
+        // 분석 전이면 기다릴 것이 없다. 이때 false 로 내리면 화면이 영원히 폴링한다.
+        boolean ready = rec != null || analysis == null;
 
         return new StaffCard(
                 session.id(),
@@ -193,28 +207,79 @@ public class StaffService {
                 rec == null ? null : rec.stylingNote(),
                 session.isAnalysisFallback(),
                 rec != null && rec.fallback(),
-                rec == null ? "분석이 아직 끝나지 않아 추천을 만들지 못했습니다." : rec.note(),
+                ready,
+                rec != null ? rec.note()
+                        : analysis == null ? "분석이 아직 끝나지 않아 추천을 만들지 못했습니다." : null,
                 session.assignedStaff().map(StaffAssignment::staffId).orElse(null));
     }
 
     /**
-     * 추천을 캐시에서 꺼내거나 한 번 계산한다.
+     * 고객이 도움을 요청하는 순간 추천 계산을 미리 시작한다.
+     * <p>
+     * <b>이 시점이 예열의 적기다.</b> 직원이 카드를 열 것이 확정된 순간이면서, 알림을
+     * 보고 손을 뻗기까지 몇 초의 여유가 실제로 존재한다. 그 여유에 5초짜리 랭킹을
+     * 밀어 넣으면 직원이 체감하는 대기는 사라진다.
+     * <p>
+     * 분석 직후가 아니라 여기인 이유: '혼자 볼게요'를 고른 고객의 추천은 아무도 보지
+     * 않는데, 무료 등급은 분당 3회라 그 낭비가 곧 429 가 되어 돌아온다. 429 는 폴백이
+     * 조용히 받아버려 화면상으로는 정상처럼 보이므로 더 나쁘다.
+     */
+    @Async
+    @EventListener
+    public void warmOnAssistRequest(SessionTransitionEvent transition) {
+        if (transition.event().to() != SessionState.ASSIST_REQUESTED) {
+            return;
+        }
+        sessions.get(transition.event().sessionId()).ifPresent(this::computeIfNeeded);
+    }
+
+    /**
+     * 추천을 캐시에서 꺼낸다. 없으면 계산을 <b>시작만</b> 하고 비어 있는 채로 돌아간다.
+     * <p>
+     * 예전에는 여기서 계산이 끝날 때까지 기다렸고, 그래서 카드를 누르고 5.2초 동안
+     * 화면에 아무것도 뜨지 않았다(실측: 5.2초 중 5.0초가 랭킹). 직원이 고객에게
+     * 걸어가면서 당장 필요한 것은 무드·팔레트·컨셉명이지 추천 목록이 아니다.
+     * 먼저 보낼 수 있는 것을 먼저 보내고, 추천은 준비되는 대로 따라붙는다.
+     */
+    private RecommendResponse cachedRecommendations(Session session) {
+        RecommendResponse cached = recommendationCache.get(session.id());
+        if (cached == null) {
+            // 폴링이 곧 재시도가 된다 — 예열이 실패했더라도 여기서 다시 걸린다.
+            warm(session);
+        }
+        return cached;
+    }
+
+    /** 자기 호출이라 프록시를 타지 않는다. 비동기 실행은 이 메서드에 붙은 @Async 가 맡는다. */
+    @Async
+    void warm(Session session) {
+        computeIfNeeded(session);
+    }
+
+    /**
+     * 실제 계산. 같은 세션에 대해 한 번만 돈다.
      * <p>
      * {@code computeIfAbsent} 를 쓰지 않는 이유: 랭킹 호출이 실측 3~7초인데 그동안
-     * ConcurrentHashMap 의 해당 버킷이 잠긴다. 드물게 중복 계산이 나더라도
-     * 맵을 잠그지 않는 쪽이 낫다.
+     * ConcurrentHashMap 의 해당 버킷이 잠긴다. 대신 진행 중 표시로 중복을 막는다.
      */
-    private RecommendResponse recommendations(Session session) {
-        RecommendResponse cached = recommendationCache.get(session.id());
-        if (cached != null) {
-            return cached;
+    private void computeIfNeeded(Session session) {
+        String id = session.id();
+        if (recommendationCache.containsKey(id) || !computing.add(id)) {
+            return;
         }
-        // 분석 전이면 비어 있다. 이때는 캐시에 넣지 않아야 분석 후 다시 계산된다.
-        RecommendResponse computed = mirror.recommend(session).orElse(null);
-        if (computed != null) {
-            recommendationCache.putIfAbsent(session.id(), computed);
+        try {
+            long started = System.currentTimeMillis();
+            // 분석 전이면 비어 있다. 이때는 캐시에 넣지 않아야 분석 후 다시 계산된다.
+            mirror.recommend(session).ifPresent(computed -> {
+                recommendationCache.putIfAbsent(id, computed);
+                log.info("추천 예열 완료 sessionId={} {}ms", id, System.currentTimeMillis() - started);
+            });
+        } catch (Exception e) {
+            // 예열 실패가 응대를 막아서는 안 된다. 다음 카드 조회가 다시 시도한다.
+            log.warn("추천 예열 실패 sessionId={} — 다음 조회에서 재시도합니다: {}", id, e.toString());
+        } finally {
+            computing.remove(id);
         }
-        return computed;
     }
 
     private Long waitingSeconds(Session session) {

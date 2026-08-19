@@ -8,6 +8,9 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+
+import com.jayway.jsonpath.JsonPath;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -90,16 +93,31 @@ class StaffControllerTest {
 
     // ------------------------------------------------------------- 응대 카드
 
+    /**
+     * 카드는 추천 계산을 기다리지 않는다.
+     * <p>
+     * 랭킹은 실측 5초라, 예전처럼 카드 전체를 거기 묶어 두면 직원이 카드를 누르고
+     * 5초 동안 빈 화면을 본다. 무드·팔레트·컨셉명은 걸어가면서 당장 필요한 정보이므로
+     * 먼저 나가고, 추천은 준비되는 대로 따라붙는다.
+     */
     @Test
-    @DisplayName("응대 카드에 무드·팔레트·컨셉명과 카테고리별 추천이 함께 온다")
-    void cardCarriesMoodAndRecommendations() throws Exception {
+    @DisplayName("카드는 추천을 기다리지 않고 무드·팔레트를 먼저 내려준다")
+    void cardDoesNotBlockOnRecommendations() throws Exception {
         String id = analyzedSession();
 
         mvc.perform(get("/api/staff/sessions/{id}", id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.conceptName").isNotEmpty())
                 .andExpect(jsonPath("$.mood").isNotEmpty())
-                .andExpect(jsonPath("$.palette").isArray())
+                .andExpect(jsonPath("$.palette").isArray());
+    }
+
+    @Test
+    @DisplayName("추천은 잠시 뒤 카드에 채워진다")
+    void recommendationsArriveShortly() throws Exception {
+        String id = analyzedSession();
+
+        awaitRecommendations(id)
                 .andExpect(jsonPath("$.recommendations.length()").value(3))
                 .andExpect(jsonPath("$.recommendations[0].items.length()").value(3))
                 .andExpect(jsonPath("$.recommendations[0].items[0].product.name").isNotEmpty());
@@ -110,9 +128,27 @@ class StaffControllerTest {
     void recommendationsAreRealProducts() throws Exception {
         String id = analyzedSession();
 
-        mvc.perform(get("/api/staff/sessions/{id}", id))
+        awaitRecommendations(id)
                 .andExpect(jsonPath("$.recommendations[*].items[*].productId").isNotEmpty())
                 .andExpect(jsonPath("$.recommendations[*].items[*].product.priceKrw").isNotEmpty());
+    }
+
+    /**
+     * 추천이 준비될 때까지 카드를 다시 조회한다. 직원 화면이 하는 것과 같은 동작이다.
+     * <p>
+     * 조회 자체가 계산을 다시 걸어주므로, 예열이 실패했더라도 여기서 복구된다.
+     */
+    private ResultActions awaitRecommendations(String sessionId) throws Exception {
+        for (int attempt = 0; attempt < 40; attempt++) {
+            ResultActions result = mvc.perform(get("/api/staff/sessions/{id}", sessionId));
+            boolean ready = Boolean.TRUE.equals(JsonPath.read(
+                    result.andReturn().getResponse().getContentAsString(), "$.recommendationsReady"));
+            if (ready) {
+                return result;
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("추천이 4초 안에 준비되지 않았습니다");
     }
 
     @Test
