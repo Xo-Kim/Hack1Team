@@ -107,42 +107,52 @@ server:
 | `JAMENDO_CLIENT_ID` | ○ | 실제 음원 없이 절차적 앰비언스만 재생 |
 | `PORT` | 플랫폼이 주입 | 8080 |
 | `CORS_ALLOWED_ORIGINS` | 프론트가 다른 도메인일 때만 | 로컬 출처만 열림 |
+| `CORS_STAFF_ORIGINS` | 위와 같은 경우 | **직원 경로가 안 열림 → 직원 화면 먹통** |
 
 ---
 
-## 4. 프론트엔드
+## 4. 프론트엔드 — 서비스 2개로 나눠 배포
 
-백엔드 jar 에는 프론트가 들어 있지 않다. 두 가지 방법이 있다.
+한 프로젝트 안에 서비스를 두 개 만든다. 루트 디렉터리만 다르게 잡으면 각각의
+`railway.json` 을 알아서 따라간다.
 
-### (A) 같은 서버에서 서빙 — 권장
+| 서비스 | 루트 | 빌드 | 기동 |
+|---|---|---|---|
+| 백엔드 | `Back` | `./gradlew clean build -x check -x test -Pproduction` | `java -jar build/libs/app.jar` |
+| 프론트 | `Front` | `npm run build` | `npm start` (`serve -s dist`) |
 
-`Front` 를 빌드해 `Back/src/main/resources/static/` 에 넣으면 백엔드 하나만 배포하면 된다.
+`serve -s` 의 `-s` 가 **SPA 폴백**이다. 라우팅이 경로 기반(`/` 고객, `/staff` 직원)이라
+이게 없으면 `/staff` 를 새로고침할 때 404 가 난다. `serve` 는 `PORT` 를 알아서 읽는다.
 
-```bash
-cd Front && npm ci && npm run build
-cp -r dist/* ../Back/src/main/resources/static/
-```
+### 서로를 가리키게 하는 설정
 
-- 동일 출처라 **CORS 설정이 필요 없다**
-- 고객 화면 `/` 과 직원 화면 `/staff` 가 한 주소에서 열린다
-- 경로 기반 라우팅이라 `/staff` 새로고침 시 서버가 `index.html` 을 돌려줘야 한다
-  (SPA 폴백 필요)
-
-### (B) 프론트를 따로 배포
-
-```bash
-VITE_API_BASE=https://<백엔드주소>/api npm run build
-```
-
-그리고 백엔드에 프론트 출처를 열어 준다.
+**프론트 서비스** — `VITE_API_BASE` 는 **빌드 시점에 번들로 구워진다.** 런타임 변수가
+아니므로 값을 바꾸면 반드시 재배포해야 한다.
 
 ```
-CORS_ALLOWED_ORIGINS=https://<프론트주소>
+VITE_API_BASE=https://<백엔드-도메인>/api
 ```
 
-> **직원 화면은 이 방법으로 동작하지 않는다.** CORS 는 `/api/health` 와
-> `/api/mirror/**` 만 열려 있고 `/api/staff/**` 는 열려 있지 않다. 추천을 고객 출처에서
-> 부를 수 없게 한 설계라, 직원 화면은 백엔드와 같은 출처에서 띄워야 한다.
+**백엔드 서비스** — 프론트 출처를 두 곳 모두에 넣는다.
+
+```
+CORS_ALLOWED_ORIGINS=https://<프론트-도메인>
+CORS_STAFF_ORIGINS=https://<프론트-도메인>
+```
+
+> **`CORS_STAFF_ORIGINS` 를 빠뜨리면 고객 화면만 되고 직원 화면이 먹통이 된다.**
+> 목록을 일부러 갈라 뒀다 — 직원 경로는 제품 추천이 나가는 유일한 통로라, 한 목록이면
+> 고객 프론트 주소를 넣는 순간 직원 경로까지 같이 열린다. 기본값은 "닫힘"이다.
+>
+> 빠뜨린 경우 기동 로그에 이렇게 남는다.
+> ```
+> 직원 경로 CORS 미개방 — 직원 화면은 백엔드와 동일 출처에서만 동작합니다.
+> ```
+
+### 한 서비스로 합치려면
+
+프론트 빌드 결과를 `Back/src/main/resources/static/` 에 넣으면 동일 출처가 되어
+CORS 설정이 통째로 필요 없어진다. 대신 `/staff` SPA 폴백을 서버에서 처리해야 한다.
 
 ---
 

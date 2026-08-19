@@ -6,9 +6,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 
 /**
  * 배포 환경에서만 드러나는 설정을 로컬에서 잡는다.
@@ -84,6 +88,73 @@ class DeploymentConfigTest {
         void keepsLocalOrigins() {
             assertThat(props.cors().allowedOrigins())
                     .contains("http://localhost:5173", "http://localhost:5174");
+        }
+    }
+
+    /**
+     * 직원 경로는 제품 추천이 시스템 밖으로 나가는 유일한 통로다.
+     * <p>
+     * 고객 출처 목록에 얹으면 프론트 주소를 하나 추가하는 순간 직원 경로까지 같이
+     * 열린다. 그게 리뷰에서 눈에 띄지 않는 형태라 테스트로 못 박는다.
+     */
+    @Nested
+    @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+    @AutoConfigureMockMvc
+    @TestPropertySource(properties = "CORS_ALLOWED_ORIGINS=https://front.example.app")
+    class StaffCorsClosedByDefault {
+
+        @Autowired
+        MockMvc mvc;
+
+        @Test
+        @DisplayName("고객 경로는 열린다")
+        void mirrorIsOpen() throws Exception {
+            mvc.perform(options("/api/mirror/sessions")
+                            .header("Origin", "https://front.example.app")
+                            .header("Access-Control-Request-Method", "POST"))
+                    .andExpect(header().string("Access-Control-Allow-Origin", "https://front.example.app"));
+        }
+
+        @Test
+        @DisplayName("★ 고객 출처를 열어도 직원 경로는 열리지 않는다")
+        void staffStaysClosed() throws Exception {
+            mvc.perform(options("/api/staff/sessions")
+                            .header("Origin", "https://front.example.app")
+                            .header("Access-Control-Request-Method", "GET"))
+                    .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
+        }
+    }
+
+    @Nested
+    @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+    @AutoConfigureMockMvc
+    @TestPropertySource(properties = {
+            "CORS_ALLOWED_ORIGINS=https://front.example.app",
+            "CORS_STAFF_ORIGINS=https://front.example.app",
+    })
+    class StaffCorsOpenedDeliberately {
+
+        @Autowired
+        MockMvc mvc;
+
+        @Test
+        @DisplayName("직원 출처를 따로 넣으면 그때 열린다 (SSE 포함)")
+        void opensWhenConfigured() throws Exception {
+            for (String path : new String[]{"/api/staff/sessions", "/api/staff/notifications"}) {
+                mvc.perform(options(path)
+                                .header("Origin", "https://front.example.app")
+                                .header("Access-Control-Request-Method", "GET"))
+                        .andExpect(header().string("Access-Control-Allow-Origin", "https://front.example.app"));
+            }
+        }
+
+        @Test
+        @DisplayName("등록하지 않은 출처는 그래도 막힌다")
+        void otherOriginsStillBlocked() throws Exception {
+            mvc.perform(options("/api/staff/sessions")
+                            .header("Origin", "https://evil.example.com")
+                            .header("Access-Control-Request-Method", "GET"))
+                    .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
         }
     }
 }

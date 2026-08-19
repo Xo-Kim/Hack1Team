@@ -53,5 +53,11 @@ mood-mirror:
     # 프론트를 같은 서버에서 서빙하면 동일 출처라 이 설정은 필요 없다.
     allowed-origins: >-
       ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174}
+
+    # 직원 화면 출처. 고객 목록과 <b>일부러 갈라 둔다</b> — 제품 추천이 나가는 유일한
+    # 통로라, 한 목록이면 고객 프론트 주소를 넣는 순간 직원 경로까지 열린다.
+    # 비어 있으면 /api/staff/** 는 CORS 를 아예 열지 않는다(동일 출처 전용).
+    #   예: CORS_STAFF_ORIGINS=https://mood-mirror-front.up.railway.app
+    staff-origins: ${CORS_STAFF_ORIGINS:}
   session:
     ttl-minutes: 15
