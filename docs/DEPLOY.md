@@ -2,6 +2,27 @@
 
 로컬에서는 멀쩡한데 배포에서만 터지는 것들을 모아 둔다.
 
+## 현재 배포 (Railway · 프로젝트 `resilient-forgiveness`)
+
+| 서비스 | 루트 | 주소 |
+|---|---|---|
+| `Hack1Team` (백엔드) | `/Back` | https://hack1team-production.up.railway.app |
+| `moodMirror` (프론트) | `/Front` | https://moodmirror.up.railway.app |
+
+고객 화면 `/`, 직원 화면 `/staff`, API 문서 `<백엔드>/swagger-ui.html`.
+
+설정된 변수:
+
+```
+Hack1Team    OPENAI_API_KEY, JAMENDO_CLIENT_ID
+             CORS_ALLOWED_ORIGINS = https://moodmirror.up.railway.app
+             CORS_STAFF_ORIGINS   = https://moodmirror.up.railway.app
+moodMirror   VITE_API_BASE        = https://hack1team-production.up.railway.app/api
+```
+
+> **한쪽 도메인이 바뀌면 반대쪽 변수도 같이 고쳐야 한다.** 특히 `VITE_API_BASE` 는
+> 빌드 시점에 번들로 구워지므로 값만 바꾸면 안 되고 프론트를 재배포해야 한다.
+
 ---
 
 ## 0. `Unsupported Gradle version: 9`
@@ -19,6 +40,25 @@ nixpacks exited with an error
 그리고 래퍼를 **Gradle 8.14.3** 으로 맞춰 두었다. Spring Boot 4.1 은 8.14 에서 그대로
 빌드되고, 이 버전은 두 빌더가 모두 안다. 래퍼를 올릴 때는 배포 빌더가 그 버전을
 지원하는지 먼저 확인할 것.
+
+---
+
+## 0-2. `./gradlew: Permission denied`
+
+```
+./gradlew clean build -x check -x test -Pproduction
+sh: 1: ./gradlew: Permission denied        exit code 126
+```
+
+Windows 에서 커밋된 리포라 `gradlew` 가 git 인덱스에 `100644`(실행 불가)로 들어가 있었다.
+리눅스 컨테이너에서는 그대로 죽는다. **로컬에서는 git-bash 가 스크립트를 sh 로 넘겨
+실행해 주기 때문에 증상이 보이지 않는다.**
+
+```bash
+git update-index --chmod=+x Back/gradlew
+```
+
+확인은 `git ls-files -s Back/gradlew` — `100755` 여야 한다.
 
 ---
 
