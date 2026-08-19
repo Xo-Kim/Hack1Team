@@ -3,6 +3,7 @@ import { HttpError, health, isSessionGone, mirror } from '../api'
 import { MoodAudio, type AudioMode } from '../audio/moodAudio'
 import { useCamera } from '../hooks/useCamera'
 import { useIdleTimeout } from '../hooks/useIdleTimeout'
+import { resolveMirror, storeId } from './mirrorIdentity'
 import { effectClass, lightingToCssVars } from '../lighting'
 import type { HealthResponse, MoodAnalysis, MusicTrack, SessionState } from '../types'
 import {
@@ -46,9 +47,12 @@ const IDLE_TIMEOUT_MS = 3 * 60 * 1000
 /** 응대 상태 변화를 감지하는 주기. 직원이 오면 음악을 줄여야 한다. */
 const POLL_MS = 3000
 
-const MIRROR_ID = import.meta.env.VITE_MIRROR_ID ?? 'mirror-01'
-const STORE_ID = import.meta.env.VITE_STORE_ID ?? 'mcm-seoul'
-const MIRROR_LABEL = import.meta.env.VITE_MIRROR_LABEL ?? '2F 피팅룸 A'
+/**
+ * 어느 거울인지는 <b>기기가 정한다.</b> 예전에는 빌드 시점 상수라 어느 탭에서 열든
+ * 같은 값("2F 피팅룸 A")을 보냈고, 그래서 두 대가 동시에 도움을 요청하면 직원 화면에서
+ * 구분되지 않았다. 자세한 규칙은 mirrorIdentity.ts 참고.
+ */
+const MIRROR = resolveMirror()
 
 export function MirrorApp() {
   const { videoRef, state: cameraState, error: cameraError, capture, retry } = useCamera()
@@ -140,7 +144,7 @@ export function MirrorApp() {
   const beginSession = useCallback(async () => {
     setErrorMessage(null)
     try {
-      const res = await mirror.start(MIRROR_ID, STORE_ID, MIRROR_LABEL)
+      const res = await mirror.start(MIRROR.mirrorId, storeId, MIRROR.mirrorLabel)
       setSessionId(res.sessionId)
       setPhase('consent')
     } catch (e) {
@@ -369,7 +373,16 @@ export function MirrorApp() {
                 ` · ${health_.musicMode === 'jamendo' ? '음원 Jamendo' : '생성 앰비언스'}`
               : '백엔드 연결 안 됨'}
           </span>
-          {sessionId && <span className="statusbar__session">{MIRROR_LABEL}</span>}
+          {/*
+            자리를 배정받지 않았으면 세션 전에도 띄운다. 직원이 "임시 · a3f9" 를
+            보고서야 알게 되면 이미 늦다 — 설치할 때 눈에 띄어야 하는 정보다.
+          */}
+          {(sessionId || MIRROR.provisional) && (
+            <span className="statusbar__session">
+              {MIRROR.mirrorLabel}
+              {MIRROR.provisional && ' — 미배정 (?mirror= 로 지정)'}
+            </span>
+          )}
         </div>
 
         {phase === 'idle' && <IdleScreen onStart={beginSession} />}
