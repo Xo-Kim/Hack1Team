@@ -33,7 +33,41 @@ plugins {
 ./gradlew clean build -x check -x test -Pproduction
 ```
 
-산출물은 `Back/build/libs/Back-0.0.1-SNAPSHOT.jar` 하나다.
+---
+
+## 1-2. 빌드는 됐는데 `java` 가 사용법만 출력하고 죽는 경우
+
+```
+ls: cannot access '*/build/libs/*jar': No such file or directory
+Usage: java [options] <mainclass> [args...]
+```
+
+플랫폼이 자동 생성하는 실행 명령이 와일드카드로 jar 를 찾다가 아무것도 못 찾은 것이다.
+`java` 가 인자 없이 실행되니 사용법을 뱉고 끝난다. 걸리는 지점이 둘이었다.
+
+| | 문제 | 결과 |
+|---|---|---|
+| 경로 | 그 패턴은 **멀티모듈**(루트 + 서브프로젝트) 배치를 가정한다 | 배포 루트가 `Back/` 이면 jar 는 `build/libs/` 에 바로 생겨 매칭 실패 |
+| 이름 | 경로를 고쳐도 jar 가 둘이면 `ls` 정렬상 `-plain.jar` 가 먼저다 | `no main manifest attribute` — 껍데기 jar 라 실행 불가 |
+
+`build.gradle` 에서 산출물을 하나로 고정해 둘 다 없앴다.
+
+```groovy
+tasks.named('bootJar') { archiveFileName = 'app.jar' }
+tasks.named('jar')     { enabled = false }          // plain jar 를 만들지 않는다
+```
+
+실행 명령은 와일드카드 없이 이 한 줄이다. `Back/Procfile` 과 `Back/railway.json` 에
+같은 내용이 들어 있다.
+
+```bash
+java -jar build/libs/app.jar
+```
+
+> 플랫폼 UI 에서 Start Command 를 직접 입력해 둔 게 있으면 **그쪽이 파일보다 우선한다.**
+> 배포가 계속 같은 증상이면 UI 설정이 남아 있는지 먼저 확인할 것.
+
+산출물은 `Back/build/libs/app.jar` 하나다.
 
 ---
 
