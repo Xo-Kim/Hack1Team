@@ -9,7 +9,12 @@ package com.example.back.service;
  */
 public class AssistConflictException extends RuntimeException {
 
-    public AssistConflictException(String staffName) {
-        super("이미 %s 님이 응대 중인 고객입니다.".formatted(staffName));
+    /**
+     * 누가 점유 중인지는 메시지에 넣지 않는다. 이 문구는 다른 직원의 화면에 그대로
+     * 뜨는데 거기서 필요한 정보는 "이미 누가 잡았다"는 사실뿐이고, 점유자가 누구인지는
+     * 서버 로그에 {@code staffId} 로 남는다.
+     */
+    public AssistConflictException() {
+        super("이미 다른 직원이 응대 중인 고객입니다.");
     }
 }

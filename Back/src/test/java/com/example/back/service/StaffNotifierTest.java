@@ -89,7 +89,7 @@ class StaffNotifierTest {
     void releaseIsDistinguishedFromNewRequest() {
         Session session = moodActive();
         session.requestAssist();
-        session.acceptAssist(new StaffAssignment("staff-01", "김직원", clock.instant()));
+        session.acceptAssist(new StaffAssignment("staff-01", clock.instant()));
         store.save(session);
         sent.clear();
 
@@ -181,7 +181,7 @@ class StaffNotifierTest {
         store.save(session);
 
         clock.advance(Duration.ofSeconds(90));
-        session.acceptAssist(new StaffAssignment("staff-01", "김직원", clock.instant()));
+        session.acceptAssist(new StaffAssignment("staff-01", clock.instant()));
         store.save(session);
         sent.clear();
 

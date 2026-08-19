@@ -144,10 +144,26 @@ public class Session {
     }
 
     /**
-     * 정상 종료. 응대를 마쳤거나 고객이 경험을 끝낸 경우다.
+     * 직원이 응대를 마친다. <b>세션은 끝나지 않는다.</b>
+     * <p>
+     * 고객은 아직 거울 앞에 있을 수 있고 연출도 그대로 유지된다. 응대만 끝나므로
+     * 담당 직원이 해제되고 상태는 연출로 돌아가며, 직원 대기 목록에서는 빠진다.
+     */
+    public void finishAssist() {
+        Map<String, String> metadata = assignedStaff == null
+                ? Map.of() : Map.of("staffId", assignedStaff.staffId());
+        transitionTo(SessionState.MOOD_ACTIVE, TransitionReason.ASSIST_FINISHED, metadata);
+        this.assignedStaff = null;
+        this.assistRequestedAt = null;
+    }
+
+    /**
+     * 정상 종료. <b>고객이 직접 마쳤을 때만 호출한다.</b>
      * <p>
      * 타임아웃({@link #timeout()})과 반드시 구분해야 한다. 핵심 지표가 완주 세션 수라
      * 둘을 같은 상태로 뭉치면 "경험을 마친 고객"과 "그냥 떠난 고객"이 섞인다.
+     * <p>
+     * 직원은 이 메서드를 부르지 않는다. 직원의 종료는 {@link #finishAssist()} 다.
      */
     public void complete() {
         transitionTo(SessionState.ENDED, TransitionReason.COMPLETED, Map.of());

@@ -16,6 +16,8 @@ public enum TransitionReason {
     ASSIST_ACCEPTED,
     /** 직원이 응대를 놓음. 세션은 다시 요청 대기로 돌아간다. */
     ASSIST_RELEASED,
+    /** 직원이 응대를 마침. 세션은 연출 상태로 돌아가고 고객은 계속 머문다. */
+    ASSIST_FINISHED,
     /** 고객이 요청을 철회함. */
     ASSIST_CANCELLED,
     SELF_BROWSE_SELECTED,

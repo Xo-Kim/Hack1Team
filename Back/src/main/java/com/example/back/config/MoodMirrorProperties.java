@@ -40,7 +40,13 @@ public record MoodMirrorProperties(
         }
     }
 
-    public record Cors(List<String> allowedOrigins) {
+    /**
+     * @param allowedOrigins 고객 미러 화면 출처. {@code /api/health} 와 {@code /api/mirror/**} 만 열린다
+     * @param staffOrigins   직원 화면 출처. <b>기본값은 비어 있고, 비어 있으면 아예 열지 않는다.</b>
+     *                       추천이 나가는 유일한 통로라 고객 출처와 같은 목록에 두지 않는다 —
+     *                       한 목록이면 고객 프론트 주소를 추가하는 순간 직원 경로까지 같이 열린다
+     */
+    public record Cors(List<String> allowedOrigins, List<String> staffOrigins) {
     }
 
     public record Session(int ttlMinutes) {

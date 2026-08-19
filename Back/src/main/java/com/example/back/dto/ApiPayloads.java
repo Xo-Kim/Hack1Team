@@ -58,9 +58,13 @@ public final class ApiPayloads {
      * 노출하지 않는 것이 이 서비스의 설계 원칙이며, 같은 서버를 쓰는 이상
      * 응답 DTO 분리가 그 원칙을 지키는 장치다.
      *
-     * @param musicDucked     직원 응대가 시작돼 음악 볼륨을 낮춰야 하는지.
-     *                        클라이언트가 상태로 추론하지 않도록 서버가 직접 알려준다
-     * @param assistStaffName 응대 중인 직원 이름. 고객 화면의 안내 문구에 쓴다
+     * <b>직원 이름은 내려가지 않는다.</b> 예전에는 "○○ 님이 곧 도착합니다"를 띄우려고
+     * 직원이 입력한 이름을 그대로 고객 화면까지 보냈는데, 검증되지 않은 자기 신고값을
+     * 고객에게 노출하는 셈이었다. 고객에게 필요한 것은 "곧 온다"는 사실이고 그건
+     * {@code state == ASSIST_ACCEPTED} 로 이미 알 수 있다.
+     *
+     * @param musicDucked 직원 응대가 시작돼 음악 볼륨을 낮춰야 하는지.
+     *                    클라이언트가 상태로 추론하지 않도록 서버가 직접 알려준다
      */
     public record SessionStateResponse(
             String sessionId,
@@ -69,8 +73,7 @@ public final class ApiPayloads {
             MoodAnalysis analysis,
             MusicTrack track,
             boolean fallback,
-            boolean musicDucked,
-            String assistStaffName
+            boolean musicDucked
     ) {
     }
 

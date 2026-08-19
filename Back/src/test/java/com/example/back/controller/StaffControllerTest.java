@@ -33,8 +33,8 @@ class StaffControllerTest {
     private static final String IMAGE = "data:image/jpeg;base64," + Base64.getEncoder().encodeToString(
             new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xD9});
 
-    private static final String STAFF_1 = "{\"staffId\":\"staff-01\",\"staffName\":\"김직원\"}";
-    private static final String STAFF_2 = "{\"staffId\":\"staff-02\",\"staffName\":\"이직원\"}";
+    private static final String STAFF_1 = "{\"staffId\":\"staff-01\"}";
+    private static final String STAFF_2 = "{\"staffId\":\"staff-02\"}";
 
     @Autowired
     MockMvc mvc;
@@ -134,7 +134,9 @@ class StaffControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(STAFF_1))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state").value("ASSIST_ACCEPTED"))
-                .andExpect(jsonPath("$.assignedStaffName").value("김직원"));
+                .andExpect(jsonPath("$.assignedStaffId").value("staff-01"))
+                // 이름은 어디에도 실리지 않는다.
+                .andExpect(jsonPath("$.assignedStaffName").doesNotExist());
 
         mvc.perform(post("/api/staff/sessions/{id}/accept", id)
                         .contentType(MediaType.APPLICATION_JSON).content(STAFF_2))
@@ -174,7 +176,7 @@ class StaffControllerTest {
 
         mvc.perform(post("/api/staff/sessions/{id}/accept", id)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"staffName\":\"이름만\"}"))
+                        .content("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("bad_request"));
     }
@@ -199,17 +201,41 @@ class StaffControllerTest {
     }
 
     @Test
-    @DisplayName("응대 완료는 ENDED — 타임아웃(EXPIRED)과 구분되어야 완주 세션을 셀 수 있다")
-    void completeEndsSessionAsCompleted() throws Exception {
+    @DisplayName("응대 완료는 세션을 끝내지 않는다 — 고객 화면이 꺼지면 쫓아내는 신호가 된다")
+    void completeFinishesAssistButKeepsSession() throws Exception {
         String id = acceptedSession();
 
         mvc.perform(post("/api/staff/sessions/{id}/complete", id)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"staffId\":\"staff-01\"}"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("MOOD_ACTIVE"))
+                .andExpect(jsonPath("$.assignedStaffId").doesNotExist());
+
+        // 고객 세션은 살아 있다. 연출도 그대로다.
+        mvc.perform(get("/api/mirror/sessions/{id}", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("MOOD_ACTIVE"))
+                .andExpect(jsonPath("$.musicDucked").value(false))
+                .andExpect(jsonPath("$.analysis").exists());
+
+        // 다만 직원 대기 목록에서는 빠진다 — 갈 이유가 없어졌다.
+        mvc.perform(get("/api/staff/sessions"))
+                .andExpect(jsonPath("$[?(@.sessionId=='" + id + "')]").isEmpty());
+    }
+
+    @Test
+    @DisplayName("세션을 끝내는 것은 고객뿐이다 — 마치기는 ENDED, 타임아웃은 EXPIRED")
+    void onlyCustomerEndsTheSession() throws Exception {
+        String id = acceptedSession();
+        mvc.perform(post("/api/staff/sessions/{id}/complete", id)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"staffId\":\"staff-01\"}"));
+
+        mvc.perform(post("/api/mirror/sessions/{id}/end", id))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state").value("ENDED"));
 
-        mvc.perform(get("/api/staff/sessions/{id}", id))
+        mvc.perform(get("/api/mirror/sessions/{id}", id))
                 .andExpect(status().isNotFound());
     }
 

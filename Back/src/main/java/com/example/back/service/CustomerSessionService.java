@@ -2,7 +2,6 @@ package com.example.back.service;
 
 import com.example.back.domain.Session;
 import com.example.back.domain.SessionState;
-import com.example.back.domain.StaffAssignment;
 import com.example.back.dto.ApiPayloads.AnalyzeResponse;
 import com.example.back.dto.ApiPayloads.SessionStateResponse;
 import com.example.back.dto.ApiPayloads.StartSessionRequest;
@@ -85,6 +84,20 @@ public class CustomerSessionService {
         return apply(sessionId, Session::cancelAssist);
     }
 
+    /**
+     * 고객이 경험을 마친다. 완주로 기록된다.
+     * <p>
+     * <b>세션을 끝낼 수 있는 것은 고객뿐이다.</b> 직원의 '응대 완료'는 응대만 닫고
+     * 세션은 살려 둔다 — 고객이 아직 거울 앞에 있는데 화면이 꺼지면 그 자체로
+     * 쫓아내는 신호가 되기 때문이다.
+     * <p>
+     * 타임아웃·중단({@link #reset})과 갈라 두는 이유는 지표다. 핵심 지표가 완주
+     * 세션 수인데 종료 경로가 하나면 "마친 고객"과 "떠난 고객"이 섞인다.
+     */
+    public SessionStateResponse end(String sessionId) {
+        return apply(sessionId, Session::complete);
+    }
+
     /** 미러를 대기 화면으로 되돌린다. 미응대 알림도 함께 정리된다. */
     public SessionStateResponse reset(String sessionId) {
         return apply(sessionId, Session::reset);
@@ -123,7 +136,6 @@ public class CustomerSessionService {
                 terminal ? null : session.analysis().orElse(null),
                 terminal ? null : session.track().orElse(null),
                 session.isAnalysisFallback(),
-                session.state() == SessionState.ASSIST_ACCEPTED,
-                session.assignedStaff().map(StaffAssignment::staffName).orElse(null));
+                session.state() == SessionState.ASSIST_ACCEPTED);
     }
 }

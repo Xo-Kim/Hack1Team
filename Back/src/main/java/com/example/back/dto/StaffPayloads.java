@@ -25,6 +25,8 @@ public final class StaffPayloads {
      *                       요청 상태가 아니면 null
      * @param needsAssist    직원이 가야 하는 세션인지. '혼자 볼게요'는 false 로 내려가
      *                       목록에는 보이되 응대 대상에서는 빠진다
+     * @param assignedStaffId 점유 중인 직원. 단말은 이 값이 자기 것인지만 보면 되므로
+     *                        이름은 내려가지 않는다 ({@link com.example.back.domain.StaffAssignment} 참고)
      */
     public record StaffSessionSummary(
             String sessionId,
@@ -35,8 +37,7 @@ public final class StaffPayloads {
             Long waitingSeconds,
             String conceptName,
             boolean needsAssist,
-            String assignedStaffId,
-            String assignedStaffName
+            String assignedStaffId
     ) {
     }
 
@@ -71,13 +72,17 @@ public final class StaffPayloads {
             boolean analysisFallback,
             boolean recommendationFallback,
             String note,
-            String assignedStaffId,
-            String assignedStaffName
+            String assignedStaffId
     ) {
     }
 
-    /** 응대 시작. staffId 는 중복 응대 판정의 기준이라 필수다. */
-    public record AcceptAssistRequest(String staffId, String staffName) {
+    /**
+     * 응대 시작. staffId 는 중복 응대 판정의 기준이라 필수다.
+     * <p>
+     * 직원 이름은 받지 않는다. 단말에 이름 입력란을 두면 매 응대마다 손으로 적어야 하고
+     * 그 값은 검증되지 않은 채 고객 화면까지 흘러갔다. 고객 안내는 상태 기반으로 바뀌었다.
+     */
+    public record AcceptAssistRequest(String staffId) {
     }
 
     /** 응대 해제. 점유자 본인인지 확인하는 데만 쓴다. */

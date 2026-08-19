@@ -18,7 +18,6 @@ import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -90,13 +89,11 @@ public class StaffService {
      */
     public StaffCard accept(String sessionId, AcceptAssistRequest request) {
         requireText(request == null ? null : request.staffId(), "staffId");
-        requireText(request.staffName(), "staffName");
 
         Session session = require(sessionId);
         checkOwner(session, request.staffId());
 
-        session.acceptAssist(new StaffAssignment(
-                request.staffId(), request.staffName(), clock.instant()));
+        session.acceptAssist(new StaffAssignment(request.staffId(), clock.instant()));
         sessions.save(session);
 
         log.info("assist accepted sessionId={} staffId={} mirrorId={}",
@@ -122,14 +119,17 @@ public class StaffService {
     }
 
     /**
-     * 응대 완료. 세션을 정상 종료로 닫는다.
+     * 응대 완료. <b>세션을 끝내지 않는다.</b>
      * <p>
-     * <b>타임아웃과 반드시 구분해야 하는 지점이다.</b> 핵심 지표가 완주 세션 수인데
-     * 종료 경로가 타임아웃 하나뿐이면 "응대를 마친 고객"과 "그냥 떠난 고객"이 같은
-     * 값으로 집계된다. 직원이 응대를 마쳤다고 눌러야 비로소 완주로 기록된다.
+     * 직원의 일이 끝난 것이지 고객의 경험이 끝난 것이 아니다. 고객은 아직 거울 앞에
+     * 서 있을 수 있고 연출도 그대로 유지된다. 여기서 세션을 닫으면 고객 화면이 갑자기
+     * 대기 화면으로 돌아가 <b>쫓아내는 신호</b>가 된다.
      * <p>
-     * 점유 중이 아닌 세션도 닫을 수 있다. 고객이 혼자 보다가 그냥 간 것을 직원이
-     * 정리하는 경우가 있어서다. 다만 다른 직원이 점유 중이면 막는다.
+     * 세션을 끝내는 것은 고객의 '마치기'({@code POST /api/mirror/sessions/{id}/end})와
+     * 무입력 타임아웃뿐이다. 다른 직원이 점유 중이면 막는다.
+     * <p>
+     * 추천 캐시는 지우지 않는다. 고객이 다시 도움을 부르면 같은 착장에 대한 추천이
+     * 필요한데, 지우면 LLM 랭킹이 한 번 더 돌아 분당 한도를 쓴다.
      */
     public StaffCard complete(String sessionId, String staffId) {
         Session session = require(sessionId);
@@ -137,11 +137,10 @@ public class StaffService {
             checkOwner(session, staffId);
         }
 
-        session.complete();
+        session.finishAssist();
         sessions.save(session);
-        recommendationCache.remove(sessionId);
 
-        log.info("session completed sessionId={} staffId={} 경과 {}초",
+        log.info("assist finished sessionId={} staffId={} 경과 {}초",
                 session.id(), staffId, session.elapsedSeconds());
         return toCard(session);
     }
@@ -155,8 +154,7 @@ public class StaffService {
                 .ifPresent(current -> {
                     log.warn("중복 응대 차단 sessionId={} 점유={} 시도={}",
                             session.id(), current.staffId(), staffId);
-                    throw new AssistConflictException(
-                            Objects.requireNonNullElse(current.staffName(), current.staffId()));
+                    throw new AssistConflictException();
                 });
     }
 
@@ -170,8 +168,7 @@ public class StaffService {
                 waitingSeconds(session),
                 session.analysis().map(MoodAnalysis::conceptName).orElse(null),
                 session.state() == SessionState.ASSIST_REQUESTED,
-                session.assignedStaff().map(StaffAssignment::staffId).orElse(null),
-                session.assignedStaff().map(StaffAssignment::staffName).orElse(null));
+                session.assignedStaff().map(StaffAssignment::staffId).orElse(null));
     }
 
     private StaffCard toCard(Session session) {
@@ -197,8 +194,7 @@ public class StaffService {
                 session.isAnalysisFallback(),
                 rec != null && rec.fallback(),
                 rec == null ? "분석이 아직 끝나지 않아 추천을 만들지 못했습니다." : rec.note(),
-                session.assignedStaff().map(StaffAssignment::staffId).orElse(null),
-                session.assignedStaff().map(StaffAssignment::staffName).orElse(null));
+                session.assignedStaff().map(StaffAssignment::staffId).orElse(null));
     }
 
     /**
